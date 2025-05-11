@@ -1,0 +1,22 @@
+name: manipulator_simulation_setup
+# root: ~/moveit_ws # You can uncomment this if your commands need a specific working directory, though absolute paths in commands are safer.
+
+windows:
+  - moveit_servo_simulation:
+      layout: tiled # Arranges panes; other options: even-horizontal, main-vertical, etc.
+      panes:
+        - moveit_launch:
+            - echo "Launching Panda MoveIt Servo Example..."
+            - ros2 launch moveit_servo servo_example.launch.py
+        - start_servo:
+            # This command might need the servo_node from the first pane to be fully up.
+            # Adding a small delay. Adjust if needed.
+            - echo "Waiting for servo_node to initialize..."
+            - sleep 3
+            - echo "Calling start_servo service..."
+            - ros2 service call /servo_node/start_servo std_srvs/srv/Trigger {}
+        - servo_keyboard_input:
+            - echo "Waiting a bit more before starting keyboard input..."
+            - sleep 3 # Ensure servo is started
+            - echo "Starting keyboard input for servo..."
+            - ros2 run moveit2_tutorials servo_keyboard_input 

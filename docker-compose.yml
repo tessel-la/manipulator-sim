@@ -1,0 +1,27 @@
+version: '3.8' 
+
+services:
+  manipulator_sim_service:
+    image: manipulator-sim-image
+    container_name: manipulator_sim_cont
+    network_mode: host
+    ipc: host
+    tty: true          # Allocates a TTY
+    stdin_open: true   # Keeps STDIN open, allowing for interactive shells
+    privileged: true   # Needed for some hardware access, use with caution
+    environment:
+      - DISPLAY=$DISPLAY
+      - XAUTHORITY=/home/rosuser/.Xauthority # User in Docker image is 'rosuser'
+      - ROS_DOMAIN_ID=0
+      - ROS_LOCALHOST_ONLY=0
+    volumes:
+      - ~/.Xauthority:/home/rosuser/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev/shm:/dev/shm # For inter-process communication, often used by ROS/Gazebo
+      # Mount the tmuxinator config file from its new location
+      - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
+
+    devices:
+      # Add any specific device mappings if needed (e.g., for joysticks or specific USB hardware)
+      - /dev/input/js0:/dev/input/js0
+    # The default command from the Dockerfile (bash) will be used.
