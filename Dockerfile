@@ -114,25 +114,23 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
 RUN echo "source ~/moveit_ws/install/setup.bash" >> /home/$USERNAME/.bashrc
 
 # Set up the entrypoint script
-COPY <<EOF /ros_entrypoint.sh
-#!/bin/bash
-set -e
-
-# Source ROS 2 environment
-source /opt/ros/\$ROS_DISTRO/setup.bash
-
-# Source the workspace setup
-if [ -f /home/\$USERNAME/moveit_ws/install/setup.bash ]; then
-  source /home/\$USERNAME/moveit_ws/install/setup.bash
-fi
-
-# Execute the command passed to the container
-exec "\$@"
-EOF
+RUN echo '#!/bin/bash' > /home/$USERNAME/ros_entrypoint.sh && \
+    echo 'set -e' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '# Source ROS 2 environment' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '# Source the workspace setup' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo 'if [ -f /home/$USERNAME/moveit_ws/install/setup.bash ]; then' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '  source /home/$USERNAME/moveit_ws/install/setup.bash' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo 'fi' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo '# Execute the command passed to the container' >> /home/$USERNAME/ros_entrypoint.sh && \
+    echo 'exec "$@"' >> /home/$USERNAME/ros_entrypoint.sh
 
 # Make the entrypoint script executable and set it as the entrypoint
-RUN sudo chmod +x /ros_entrypoint.sh
-ENTRYPOINT ["/ros_entrypoint.sh"]
+RUN sudo chmod +x /home/$USERNAME/ros_entrypoint.sh
+ENTRYPOINT ["/home/rosuser/ros_entrypoint.sh"]
 
 # Default command to start a bash shell
 CMD ["bash"] 
