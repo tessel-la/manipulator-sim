@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   manipulator_sim_service:
-    image: manipulator-sim-image
+    # image: manipulator-sim-image # Commented out or remove this line
+    build: # Added build configuration
+      context: . # Assumes docker-compose.yml is in the manipulator-sim directory
+      dockerfile: Dockerfile
     container_name: manipulator_sim_cont
     network_mode: host
     ipc: host
