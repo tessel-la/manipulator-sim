@@ -1,0 +1,17 @@
+{
+  "name": "Manipulator Sim DevContainer",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "manipulator_sim_service",
+  "workspaceFolder": "/home/rosuser/moveit_ws",
+  "shutdownAction": "none",
+  "postCreateCommand": "sudo gem install tmuxinator || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.cpptools"
+      ]
+    }
+  },
+  "remoteUser": "rosuser"
+} 
