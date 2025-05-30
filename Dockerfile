@@ -116,7 +116,6 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
 # Add sourcing of the new workspace to .bashrc for convenience in interactive shells
 RUN echo "source ~/moveit_ws/install/setup.bash" >> /home/$USERNAME/.bashrc
 
-
 # Copy the CORS-enabled mesh server script
 COPY cors_mesh_server.py /home/$USERNAME/cors_mesh_server.py
 RUN sudo chown $USERNAME:$USERNAME /home/$USERNAME/cors_mesh_server.py && \
@@ -133,11 +132,6 @@ RUN echo '#!/bin/bash' > /home/$USERNAME/ros_entrypoint.sh && \
     echo 'if [ -f /home/$USERNAME/moveit_ws/install/setup.bash ]; then' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo '  source /home/$USERNAME/moveit_ws/install/setup.bash' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo 'fi' >> /home/$USERNAME/ros_entrypoint.sh && \
-    echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
-    echo '# Start CORS-enabled HTTP server in the background to serve mesh files' >> /home/$USERNAME/ros_entrypoint.sh && \
-    echo 'echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/humble/share/ ..."' >> /home/$USERNAME/ros_entrypoint.sh && \
-    echo 'python3 /home/$USERNAME/cors_mesh_server.py 8000 /opt/ros/humble/share/ &' >> /home/$USERNAME/ros_entrypoint.sh && \
-    echo 'echo "HTTP server started with CORS enabled."' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo '# Execute the command passed to the container' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo 'exec "$@"' >> /home/$USERNAME/ros_entrypoint.sh

@@ -20,3 +20,6 @@ windows:
             - sleep 3 # Ensure servo is started
             - echo "Starting keyboard input for servo..."
             - ros2 run moveit2_tutorials servo_keyboard_input 
+        - cors_mesh_server:
+            - echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/humble/share/ ..."
+            - python3 /home/rosuser/cors_mesh_server.py 8000 /opt/ros/humble/share/ 
