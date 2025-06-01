@@ -23,7 +23,7 @@ services:
       - /dev/shm:/dev/shm # For inter-process communication, often used by ROS/Gazebo
       # Mount the tmuxinator config file from its new location
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
-
+      - ./custom_servo_demo:/home/rosuser/moveit_ws/src/custom_servo_demo
     devices:
       # Add any specific device mappings if needed (e.g., for joysticks or specific USB hardware)
       - /dev/input/js0:/dev/input/js0

@@ -107,6 +107,9 @@ RUN git clone --branch humble https://github.com/ros-planning/moveit2_tutorials 
 WORKDIR /home/$USERNAME/moveit_ws/src
 RUN vcs import < moveit2_tutorials/moveit2_tutorials.repos
 
+COPY custom_servo_demo /home/$USERNAME/moveit_ws/src/custom_servo_demo
+
+
 WORKDIR /home/$USERNAME/moveit_ws
 # Initialize rosdep and install dependencies
 RUN sudo apt-get update && \
