@@ -1,7 +1,7 @@
-# Start with an official ROS 2 Humble base image
-FROM ros:humble-ros-base
+# Start with Ubuntu 22.04 (Jammy) base image
+FROM ubuntu:22.04
 
-# Set environment variables to prevent interactive prompts and define ROS distro
+# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -10,52 +10,72 @@ ENV ROS_DISTRO=humble
 # Set the default shell to bash
 SHELL ["/bin/bash", "-c"]
 
-# Install essential packages, ROS development tools, git, vcstool, and other utilities
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        bash-completion \
-        build-essential \
-        cmake \
-        curl \
-        gdb \
-        git \
-        nano \
-        openssh-client \
-        python3-colcon-common-extensions \
-        python3-rosdep \
-        python3-vcstool \
-        sudo \
-        vim \
-        # For tmuxinator
-        tmux \
-        ruby \
-        ruby-dev \
-        # Essential MoveIt2 packages
-        ros-humble-moveit \
-        ros-humble-moveit-ros-visualization \
-        ros-humble-moveit-ros-planning-interface \
-        ros-humble-moveit-ros-planning \
-        ros-humble-moveit-ros-move-group \
-        ros-humble-moveit-planners \
-        ros-humble-moveit-plugins \
-        ros-humble-moveit-simple-controller-manager \
-        ros-humble-moveit-visual-tools \
-        ros-humble-moveit-resources-panda-moveit-config \
-        ros-humble-moveit-resources-panda-description \
-        ros-humble-moveit-kinematics \
-        ros-humble-moveit-ros-perception \
-        ros-humble-moveit-ros-robot-interaction \
-        ros-humble-moveit-runtime \
-        ros-humble-moveit-servo \
-        ros-humble-moveit-setup-assistant \
-        ros-humble-joint-state-publisher-gui \
-        ros-humble-xacro \
-        ros-humble-rviz2 \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Setup retry function for apt
+RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
+
+# Update apt sources to use a different mirror
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://us.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu/|http://us.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list
+
+# Install dependencies and set up ROS 2 repository
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    lsb-release \
+    software-properties-common \
+    && add-apt-repository universe \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ROS 2 packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-ros-base \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-vcstool \
+    # Essential MoveIt2 packages
+    ros-humble-moveit \
+    ros-humble-moveit-ros-visualization \
+    ros-humble-moveit-ros-planning-interface \
+    ros-humble-moveit-ros-planning \
+    ros-humble-moveit-ros-move-group \
+    ros-humble-moveit-planners \
+    ros-humble-moveit-plugins \
+    ros-humble-moveit-simple-controller-manager \
+    ros-humble-moveit-visual-tools \
+    ros-humble-moveit-resources-panda-moveit-config \
+    ros-humble-moveit-resources-panda-description \
+    ros-humble-moveit-kinematics \
+    ros-humble-moveit-ros-perception \
+    ros-humble-moveit-ros-robot-interaction \
+    ros-humble-moveit-runtime \
+    ros-humble-moveit-servo \
+    ros-humble-moveit-setup-assistant \
+    ros-humble-joint-state-publisher-gui \
+    ros-humble-xacro \
+    ros-humble-rviz2 \
+    # Additional tools
+    bash-completion \
+    build-essential \
+    cmake \
+    curl \
+    gdb \
+    git \
+    nano \
+    openssh-client \
+    sudo \
+    vim \
+    tmux \
+    ruby \
+    ruby-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install tmuxinator gem
-RUN sudo gem install tmuxinator
+RUN gem install tmuxinator
 
 # Create a non-root user 'rosuser'
 ARG USER_UID=1000
@@ -88,39 +108,36 @@ WORKDIR /home/$USERNAME/moveit_ws/src
 RUN vcs import < moveit2_tutorials/moveit2_tutorials.repos
 
 WORKDIR /home/$USERNAME/moveit_ws
-# Install system dependencies for all packages in the workspace using rosdep
+# Initialize rosdep and install dependencies
 RUN sudo apt-get update && \
-    (sudo rosdep init && echo "Rosdep initialized successfully." || echo "Rosdep already initialized or init failed, continuing...") && \
+    sudo rosdep init || echo "Rosdep already initialized" && \
     rosdep update && \
     rosdep install --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y --as-root apt:true && \
-    # Clean up apt caches and ROS user-specific data
     sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/* && \
     rm -rf /home/$USERNAME/.ros
 
-# Expose port for HTTP mesh server
-EXPOSE 8000
-
 # Install colcon mixin
-RUN sudo apt install python3-colcon-common-extensions && \
-    sudo apt install python3-colcon-mixin && \
+RUN sudo apt-get update && \
+    sudo apt-get install -y python3-colcon-common-extensions python3-colcon-mixin && \
     colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml && \
-    colcon mixin update default
+    colcon mixin update default && \
+    sudo apt-get clean && \
+    sudo rm -rf /var/lib/apt/lists/*
 
 # Build the workspace
-WORKDIR /home/$USERNAME/moveit_ws
 RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
     export MAKEFLAGS="-j4" && \
     colcon build --symlink-install --executor sequential --mixin release
 
-# Add sourcing of the new workspace to .bashrc for convenience in interactive shells
+# Add sourcing of the new workspace to .bashrc
 RUN echo "source ~/moveit_ws/install/setup.bash" >> /home/$USERNAME/.bashrc
 
 # Copy the CORS-enabled mesh server script
 COPY cors_mesh_server.py /home/$USERNAME/cors_mesh_server.py
 RUN sudo chown $USERNAME:$USERNAME /home/$USERNAME/cors_mesh_server.py && \
     chmod +x /home/$USERNAME/cors_mesh_server.py
-    
+
 # Set up the entrypoint script
 RUN echo '#!/bin/bash' > /home/$USERNAME/ros_entrypoint.sh && \
     echo 'set -e' >> /home/$USERNAME/ros_entrypoint.sh && \
@@ -135,9 +152,13 @@ RUN echo '#!/bin/bash' > /home/$USERNAME/ros_entrypoint.sh && \
     echo '' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo '# Execute the command passed to the container' >> /home/$USERNAME/ros_entrypoint.sh && \
     echo 'exec "$@"' >> /home/$USERNAME/ros_entrypoint.sh
+
 # Make the entrypoint script executable and set it as the entrypoint
 RUN sudo chmod +x /home/$USERNAME/ros_entrypoint.sh
 ENTRYPOINT ["/home/rosuser/ros_entrypoint.sh"]
+
+# Expose port for HTTP mesh server
+EXPOSE 8000
 
 # Default command to start a bash shell
 CMD ["bash"] 
