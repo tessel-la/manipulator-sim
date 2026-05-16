@@ -1,5 +1,3 @@
-version: '3.8' 
-
 services:
   manipulator_sim_service:
     # image: manipulator-sim-image # Commented out or remove this line
@@ -24,7 +22,4 @@ services:
       # Mount the tmuxinator config file from its new location
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
       - ./custom_servo_demo:/home/rosuser/moveit_ws/src/custom_servo_demo
-    devices:
-      # Add any specific device mappings if needed (e.g., for joysticks or specific USB hardware)
-      - /dev/input/js0:/dev/input/js0
     # The default command from the Dockerfile (bash) will be used.
