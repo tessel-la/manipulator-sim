@@ -1,0 +1,27 @@
+# false = absolute target, true = relative offset from the current pose.
+bool relative
+
+# Absolute targets are expressed in the base frame. Relative targets are
+# offsets from the current end-effector pose in the base frame.
+float64 x
+float64 y
+float64 z
+
+# Yaw angle in radians around the base Z axis. In relative mode this is a delta.
+float64 yaw
+
+# Optional overrides. Values <= 0 use the server defaults.
+float64 position_tolerance
+float64 yaw_tolerance
+float64 timeout
+---
+bool success
+string message
+float64 final_x
+float64 final_y
+float64 final_z
+float64 final_yaw
+---
+float64 remaining_distance
+float64 remaining_yaw
+string state

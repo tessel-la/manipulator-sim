@@ -9,6 +9,7 @@ This repository provides a robotic arm simulation environment specifically confi
 
 -   **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Humble and the MoveIt Tutorials Package.
 -   **Panda Robot**: Currently focused on the Franka Emika Panda robot simulation.
+-   **Reusable Action Control**: Provides ROS2 actions, a CLI, and YAML sequences for absolute and relative end-effector moves.
 -   **Automated Startup**: Uses `tmuxinator` and Docker Compose to automatically launch necessary ROS nodes in a structured tmux session upon container startup.
 
 ## Prerequisites
@@ -23,6 +24,9 @@ This repository provides a robotic arm simulation environment specifically confi
 .manipulator-sim/
 ├── Dockerfile                 # Defines the Docker image with ROS 2, MoveIt2, and dependencies.
 ├── docker-compose.yml         # Configures the Docker container services and automated startup.
+├── custom_servo_demo/         # MoveIt Servo launch/config for the Panda simulation.
+├── manipulator_action_interfaces/ # ROS2 action definitions for motion commands and sequences.
+├── manipulator_actions/       # Python action server, CLI, motion helpers, and YAML sequences.
 ├── simulation/
 │   └── manipulator_simulation_setup.yml # Tmuxinator config for launching ROS nodes.
 └── README.md                  # This file.
@@ -39,23 +43,29 @@ cd manipulator-sim
 
 ### 2. Build the Docker Image
 
-This command builds the Docker image tagged as `manipulator-sim-image` using the `Dockerfile`.
+This command builds the Docker image and the ROS workspace packages copied into the image.
 
 ```bash
-docker build -t manipulator-sim-image .
+docker compose build
 ```
 
-This process might take some time, especially on the first build, as it downloads the ROS 2 base image and installs all dependencies.
+This process might take some time, especially on the first build, as it downloads the ROS 2 base image, installs dependencies, clones the MoveIt tutorials, and builds the workspace.
 
 ### 3. Run the Docker Container
 
 Once the image is built, you can start the container using Docker Compose:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-This command will start the `manipulator_sim_service` container in detached mode (`-d`). The container will be running, but no specific ROS processes or `tmuxinator` will be started automatically. You will have a bash shell as the default entry point.
+This starts the `manipulator_sim_service` container in detached mode. On startup, the entrypoint sources ROS and rebuilds the mounted ROS workspace packages into Docker-managed `build`, `install`, and `log` volumes.
+
+To disable the automatic workspace rebuild for faster container startup:
+
+```bash
+AUTO_BUILD_WORKSPACE=0 docker compose up -d
+```
 
 ### 4. Enter the Container and Start the Simulation
 
@@ -65,24 +75,65 @@ To start your simulation environment, you first need to get a shell inside the r
 docker exec -it manipulator_sim_cont bash
 ```
 
-Once inside the container's bash shell, navigate to your workspace (if necessary, though the entrypoint script should source it) and start the `tmuxinator` session:
+Once inside the container's bash shell, start the simulation helper:
 
 ```bash
-# The ros_entrypoint.sh should have already sourced your ROS and workspace setup.
-# If you have a specific root directory for tmuxinator project, ensure you are in a relevant place or have it configured in the .yml file.
-# For example, if your tmuxinator config expects to be in moveit_ws:
-# cd ~/moveit_ws 
-tmuxinator start manipulator_simulation_setup
+/home/rosuser/start_simulation.sh
 ```
 
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
-1.  **moveit_launch**: Runs `ros2 launch moveit_servo servo_example.launch.py`
+1.  **moveit_launch**: Runs `ros2 launch custom_servo_demo servo_example.launch.py`
 2.  **start_servo**: Calls the `/servo_node/start_servo` service.
 3.  **servo_keyboard_input**: Runs `ros2 run moveit2_tutorials servo_keyboard_input` for teleoperation.
+4.  **manipulator_actions**: Runs `ros2 run manipulator_actions action_server`.
 
 Your terminal will now be attached to this tmux session.
 
-### 5. Interacting with Tmux (Attaching/Detaching)
+### 5. Controlling the Robot with Actions
+
+The action server exposes two ROS2 actions:
+
+-   `/move_end_effector` using `manipulator_action_interfaces/action/MoveEndEffector`
+-   `/run_sequence` using `manipulator_action_interfaces/action/RunSequence`
+
+For `/move_end_effector`, `relative: false` means an absolute base-frame target and `relative: true` means an offset from the current end-effector pose.
+
+Use the CLI for common commands:
+
+```bash
+ros2 run manipulator_actions manipulator_cli move absolute --x 0.45 --y 0.0 --z 0.35 --yaw 0.0
+ros2 run manipulator_actions manipulator_cli move relative --up 0.05
+ros2 run manipulator_actions manipulator_cli move relative --forward 0.10 --yaw 0.3
+ros2 run manipulator_actions manipulator_cli sequence run demo_pick
+```
+
+Directions are expressed in the Panda base frame: `forward/back` map to X, `left/right` map to Y, and `up/down` map to Z. The `yaw` argument is an angle in radians around the base Z axis.
+
+Reusable routines live in `manipulator_actions/config/sequences/*.yaml`:
+
+```yaml
+steps:
+  - move_relative:
+      up: 0.05
+  - wait:
+      seconds: 0.5
+  - move_absolute:
+      x: 0.45
+      y: 0.0
+      z: 0.35
+      yaw: 0.0
+```
+
+After editing mounted source files inside Docker, rebuild the workspace:
+
+```bash
+colcon build --symlink-install --packages-select custom_servo_demo manipulator_action_interfaces manipulator_actions
+source install/setup.bash
+```
+
+The same package list is also used by the Docker entrypoint via the `COLCON_PACKAGES` environment variable in `docker-compose.yml`.
+
+### 6. Interacting with Tmux (Attaching/Detaching)
 
 **Navigating Tmux Panes:**
 
@@ -117,12 +168,12 @@ If you detach from the tmux session (using `Ctrl+b` then `d`) or if your `docker
 
 You can find more `tmux` commands online (e.g., a `tmux` cheatsheet).
 
-### 6. Stopping the Simulation Container
+### 7. Stopping the Simulation Container
 
 To stop the Docker Compose setup and the container (which also stops any running tmux sessions and ROS nodes within it):
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## Customization
@@ -130,6 +181,3 @@ docker-compose down
 -   **Tmuxinator Configuration**: Modify `simulation/manipulator_simulation_setup.yml` to change the commands launched, the layout, or add more panes/windows.
 -   **Dockerfile**: Add or remove ROS packages or system dependencies in the `Dockerfile` and rebuild the image.
 -   **Docker Compose**: Adjust container settings, volumes, or environment variables in `docker-compose.yml`.
-
-
-

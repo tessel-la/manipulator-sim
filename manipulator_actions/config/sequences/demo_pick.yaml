@@ -1,0 +1,12 @@
+steps:
+  - move_relative:
+      up: 0.05
+  - wait:
+      seconds: 0.5
+  - move_relative:
+      forward: 0.08
+  - wait:
+      seconds: 0.5
+  - move_relative:
+      back: 0.08
+      down: 0.05

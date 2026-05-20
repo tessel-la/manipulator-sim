@@ -1,0 +1,9 @@
+# Name of a YAML sequence installed in the manipulator_actions package.
+string name
+---
+bool success
+string message
+uint32 completed_steps
+---
+uint32 current_step
+string current_action

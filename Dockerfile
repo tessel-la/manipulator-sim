@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-colcon-mixin \
     python3-rosdep \
+    python3-yaml \
     python3-vcstool \
     ruby \
     ruby-dev \
@@ -65,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-robot-state-publisher \
     ros-humble-ros-base \
     ros-humble-ros2-control \
+    ros-humble-rosidl-default-generators \
     ros-humble-rviz-visual-tools \
     ros-humble-rviz2 \
     ros-humble-sensor-msgs \
@@ -98,34 +100,29 @@ WORKDIR /home/${USERNAME}/moveit_ws
 RUN git clone --depth 1 --branch humble https://github.com/ros-planning/moveit2_tutorials src/moveit2_tutorials
 
 COPY --chown=${USERNAME}:${USERNAME} custom_servo_demo /home/${USERNAME}/moveit_ws/src/custom_servo_demo
+COPY --chown=${USERNAME}:${USERNAME} manipulator_action_interfaces /home/${USERNAME}/moveit_ws/src/manipulator_action_interfaces
+COPY --chown=${USERNAME}:${USERNAME} manipulator_actions /home/${USERNAME}/moveit_ws/src/manipulator_actions
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     colcon build \
       --symlink-install \
-      --packages-select moveit2_tutorials custom_servo_demo \
+      --packages-select moveit2_tutorials custom_servo_demo manipulator_action_interfaces manipulator_actions \
       --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 RUN echo "source ~/moveit_ws/install/setup.bash" >> /home/${USERNAME}/.bashrc
 
 COPY --chown=${USERNAME}:${USERNAME} cors_mesh_server.py /home/${USERNAME}/cors_mesh_server.py
-RUN chmod +x /home/${USERNAME}/cors_mesh_server.py
-
-RUN printf '%s\n' \
-    '#!/bin/bash' \
-    'set -e' \
-    '' \
-    'source /opt/ros/$ROS_DISTRO/setup.bash' \
-    '' \
-    'if [ -f /home/$USERNAME/moveit_ws/install/setup.bash ]; then' \
-    '  source /home/$USERNAME/moveit_ws/install/setup.bash' \
-    'fi' \
-    '' \
-    'exec "$@"' \
-    > /home/${USERNAME}/ros_entrypoint.sh && \
-    chmod +x /home/${USERNAME}/ros_entrypoint.sh
+COPY --chown=${USERNAME}:${USERNAME} docker/scripts/ros_entrypoint.sh /home/${USERNAME}/ros_entrypoint.sh
+COPY --chown=${USERNAME}:${USERNAME} docker/scripts/start_simulation.sh /home/${USERNAME}/start_simulation.sh
+RUN chmod +x \
+    /home/${USERNAME}/cors_mesh_server.py \
+    /home/${USERNAME}/ros_entrypoint.sh \
+    /home/${USERNAME}/start_simulation.sh
 
 ENV SHELL=/bin/bash
 ENV EDITOR=vim
+ENV MOVEIT_WS=/home/${USERNAME}/moveit_ws
+ENV COLCON_PACKAGES="moveit2_tutorials custom_servo_demo manipulator_action_interfaces manipulator_actions"
 
 ENTRYPOINT ["/home/rosuser/ros_entrypoint.sh"]
 
