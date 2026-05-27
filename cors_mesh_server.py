@@ -62,7 +62,8 @@ if __name__ == "__main__":
         port = int(sys.argv[1])
     
     # Change to the directory to serve (default is current directory)
-    serve_directory = '/opt/ros/humble/share/'
+    ros_distro = os.environ.get('ROS_DISTRO', 'jazzy')
+    serve_directory = f'/opt/ros/{ros_distro}/share/'
     if len(sys.argv) > 2:
         serve_directory = sys.argv[2]
     
@@ -80,4 +81,4 @@ if __name__ == "__main__":
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down server...")
-        httpd.shutdown() 
+        httpd.shutdown()

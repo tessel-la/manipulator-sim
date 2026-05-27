@@ -2,12 +2,12 @@
 
 Robotic Manipulator Planning, Execution and Visualization environment.
 
-This repository provides a robotic arm simulation environment specifically configured and tested for the [Robo-Boy](https://github.com/tessel-la/robo-boy) project. It utilizes components and setup based on the Moveit Tutorials Humble package.
+This repository provides a robotic arm simulation environment specifically configured and tested for the [Robo-Boy](https://github.com/tessel-la/robo-boy) project. It uses ROS 2 Jazzy, MoveIt 2, and a Panda MoveIt Servo setup.
 
 
 ## Features
 
--   **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Humble and the MoveIt Tutorials Package.
+-   **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Jazzy on Ubuntu Noble.
 -   **Panda Robot**: Currently focused on the Franka Emika Panda robot simulation.
 -   **Reusable Action Control**: Provides ROS2 actions, a CLI, and YAML sequences for absolute and relative end-effector moves.
 -   **Automated Startup**: Uses `tmuxinator` and Docker Compose to automatically launch necessary ROS nodes in a structured tmux session upon container startup.
@@ -49,7 +49,9 @@ This command builds the Docker image and the ROS workspace packages copied into 
 docker compose build
 ```
 
-This process might take some time, especially on the first build, as it downloads the ROS 2 base image, installs dependencies, clones the MoveIt tutorials, and builds the workspace.
+This process might take some time, especially on the first build, as it downloads the ROS 2 Jazzy base image, installs MoveIt 2 dependencies, and builds the workspace.
+
+The Compose workspace cache volumes are named with a `jazzy` suffix so older Humble `install` setup files are not reused by accident.
 
 ### 3. Run the Docker Container
 
@@ -83,9 +85,10 @@ Once inside the container's bash shell, start the simulation helper:
 
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
 1.  **moveit_launch**: Runs `ros2 launch custom_servo_demo servo_example.launch.py`
-2.  **start_servo**: Calls the `/servo_node/start_servo` service.
-3.  **servo_keyboard_input**: Runs `ros2 run moveit2_tutorials servo_keyboard_input` for teleoperation.
+2.  **prepare_servo**: Selects Twist command mode with `/servo_node/switch_command_type` and unpauses Servo with `/servo_node/pause_servo`.
+3.  **servo_keyboard_input**: Runs `ros2 run moveit_servo servo_keyboard_input` for teleoperation.
 4.  **manipulator_actions**: Runs `ros2 run manipulator_actions action_server`.
+5.  **cors_mesh_server**: Serves installed ROS mesh assets from `/opt/ros/${ROS_DISTRO}/share` on port 8000.
 
 Your terminal will now be attached to this tmux session.
 

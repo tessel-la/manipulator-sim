@@ -4,7 +4,7 @@ set -e
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 WORKSPACE="${MOVEIT_WS:-/home/${USERNAME}/moveit_ws}"
-DEFAULT_PACKAGES="moveit2_tutorials custom_servo_demo manipulator_action_interfaces manipulator_actions"
+DEFAULT_PACKAGES="custom_servo_demo manipulator_action_interfaces manipulator_actions"
 PACKAGES="${COLCON_PACKAGES:-${DEFAULT_PACKAGES}}"
 
 build_workspace() {

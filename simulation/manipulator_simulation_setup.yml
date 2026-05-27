@@ -8,22 +8,22 @@ windows:
         - moveit_launch:
             - echo "Launching Panda MoveIt Servo Example..."
             - ros2 launch custom_servo_demo servo_example.launch.py
-        - start_servo:
-            # This command might need the servo_node from the first pane to be fully up.
-            # Adding a small delay. Adjust if needed.
+        - prepare_servo:
+            # These commands need the servo_node from the first pane to be up.
             - echo "Waiting for servo_node to initialize..."
             - sleep 3
-            - echo "Calling start_servo service..."
-            - ros2 service call /servo_node/start_servo std_srvs/srv/Trigger {}
+            - echo "Selecting Twist command mode and unpausing Servo..."
+            - 'ros2 service call /servo_node/switch_command_type moveit_msgs/srv/ServoCommandType "{command_type: 1}"'
+            - 'ros2 service call /servo_node/pause_servo std_srvs/srv/SetBool "{data: false}"'
         - servo_keyboard_input:
             - echo "Waiting a bit more before starting keyboard input..."
             - sleep 3 # Ensure servo is started
             - echo "Starting keyboard input for servo..."
-            - ros2 run moveit2_tutorials servo_keyboard_input
+            - ros2 run moveit_servo servo_keyboard_input
         - manipulator_actions:
             - echo "Waiting for Servo before starting manipulator action server..."
             - sleep 4
             - ros2 run manipulator_actions action_server
         - cors_mesh_server:
-            - echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/humble/share/ ..."
-            - python3 /home/rosuser/cors_mesh_server.py 8000 /opt/ros/humble/share/
+            - echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/${ROS_DISTRO:-jazzy}/share/ ..."
+            - python3 /home/rosuser/cors_mesh_server.py 8000 /opt/ros/${ROS_DISTRO:-jazzy}/share/

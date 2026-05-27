@@ -6,11 +6,12 @@ import time
 from typing import Callable, Optional, Tuple
 
 from geometry_msgs.msg import TwistStamped
+from moveit_msgs.srv import ServoCommandType
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
-from std_srvs.srv import Trigger
+from std_srvs.srv import SetBool
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from manipulator_actions.motion_math import (
@@ -25,6 +26,7 @@ from manipulator_actions.motion_math import (
 
 
 FeedbackCallback = Callable[[float, float, str], None]
+TWIST_COMMAND_TYPE = 1
 
 
 class ServoMotionController:
@@ -36,7 +38,8 @@ class ServoMotionController:
         base_frame: str = "panda_link0",
         ee_frame: str = "panda_link8",
         twist_topic: str = "/servo_node/delta_twist_cmds",
-        start_servo_service: str = "/servo_node/start_servo",
+        pause_servo_service: str = "/servo_node/pause_servo",
+        switch_command_type_service: str = "/servo_node/switch_command_type",
         publish_hz: float = 20.0,
         limits: Optional[MotionLimits] = None,
     ) -> None:
@@ -46,28 +49,53 @@ class ServoMotionController:
         self.publish_hz = publish_hz
         self.limits = limits or MotionLimits()
         self._publisher = node.create_publisher(TwistStamped, twist_topic, 10)
-        self._start_client = node.create_client(Trigger, start_servo_service)
+        self._pause_client = node.create_client(SetBool, pause_servo_service)
+        self._command_type_client = node.create_client(
+            ServoCommandType, switch_command_type_service
+        )
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, node)
 
-    def start_servo(self, timeout_sec: float = 5.0) -> Tuple[bool, str]:
-        if not self._start_client.wait_for_service(timeout_sec=timeout_sec):
-            return False, "Servo start service is not available"
+    def prepare_servo(self, timeout_sec: float = 5.0) -> Tuple[bool, str]:
+        """Select Twist input and unpause the Jazzy Servo node."""
+        if not self._command_type_client.wait_for_service(timeout_sec=timeout_sec):
+            return False, "Servo command type service is not available"
 
-        future = self._start_client.call_async(Trigger.Request())
+        command_request = ServoCommandType.Request()
+        command_request.command_type = TWIST_COMMAND_TYPE
+        future = self._command_type_client.call_async(command_request)
         deadline = time.monotonic() + timeout_sec
         while rclpy.ok() and not future.done() and time.monotonic() < deadline:
             time.sleep(0.02)
 
         if not future.done():
-            return False, "Timed out waiting for Servo start response"
+            return False, "Timed out waiting for Servo command type response"
 
         response = future.result()
         if response is None:
-            return False, "Servo start service returned no response"
+            return False, "Servo command type service returned no response"
         if not response.success:
-            return False, response.message or "Servo refused to start"
-        return True, response.message or "Servo started"
+            return False, "Servo refused Twist command mode"
+
+        if not self._pause_client.wait_for_service(timeout_sec=timeout_sec):
+            return False, "Servo pause service is not available"
+
+        pause_request = SetBool.Request()
+        pause_request.data = False
+        future = self._pause_client.call_async(pause_request)
+        deadline = time.monotonic() + timeout_sec
+        while rclpy.ok() and not future.done() and time.monotonic() < deadline:
+            time.sleep(0.02)
+
+        if not future.done():
+            return False, "Timed out waiting for Servo pause response"
+
+        response = future.result()
+        if response is None:
+            return False, "Servo pause service returned no response"
+        if not response.success:
+            return False, response.message or "Servo refused to unpause"
+        return True, response.message or "Servo ready"
 
     def current_pose(self) -> PoseTarget:
         transform = self._tf_buffer.lookup_transform(
@@ -94,7 +122,7 @@ class ServoMotionController:
         feedback: Optional[FeedbackCallback] = None,
         cancel_requested: Optional[Callable[[], bool]] = None,
     ) -> Tuple[bool, str, PoseTarget]:
-        ok, message = self.start_servo()
+        ok, message = self.prepare_servo()
         if not ok:
             return False, message, PoseTarget(0.0, 0.0, 0.0, 0.0)
         return self._servo_to_target(

@@ -36,7 +36,10 @@ class ManipulatorActionServer(Node):
         self.declare_parameter("base_frame", "panda_link0")
         self.declare_parameter("ee_frame", "panda_link8")
         self.declare_parameter("twist_topic", "/servo_node/delta_twist_cmds")
-        self.declare_parameter("start_servo_service", "/servo_node/start_servo")
+        self.declare_parameter("pause_servo_service", "/servo_node/pause_servo")
+        self.declare_parameter(
+            "switch_command_type_service", "/servo_node/switch_command_type"
+        )
         self.declare_parameter("position_tolerance", 0.01)
         self.declare_parameter("yaw_tolerance", 0.03)
         self.declare_parameter("timeout", 10.0)
@@ -47,7 +50,10 @@ class ManipulatorActionServer(Node):
             base_frame=self.get_parameter("base_frame").value,
             ee_frame=self.get_parameter("ee_frame").value,
             twist_topic=self.get_parameter("twist_topic").value,
-            start_servo_service=self.get_parameter("start_servo_service").value,
+            pause_servo_service=self.get_parameter("pause_servo_service").value,
+            switch_command_type_service=self.get_parameter(
+                "switch_command_type_service"
+            ).value,
         )
 
         self._move_server = ActionServer(

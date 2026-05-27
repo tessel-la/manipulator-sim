@@ -1,8 +1,8 @@
 services:
   manipulator_sim_service:
-    # image: manipulator-sim-image # Commented out or remove this line
-    build: # Added build configuration
-      context: . # Assumes docker-compose.yml is in the manipulator-sim directory
+    # image: manipulator-sim-image
+    build:
+      context: .
       dockerfile: Dockerfile
     container_name: manipulator_sim_cont
     network_mode: host
@@ -12,26 +12,25 @@ services:
     privileged: true   # Needed for some hardware access, use with caution
     environment:
       - DISPLAY=$DISPLAY
-      - XAUTHORITY=/home/rosuser/.Xauthority # User in Docker image is 'rosuser'
+      - XAUTHORITY=/home/rosuser/.Xauthority
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=0
       - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-1}
-      - COLCON_PACKAGES=${COLCON_PACKAGES:-moveit2_tutorials custom_servo_demo manipulator_action_interfaces manipulator_actions}
+      - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions}
     volumes:
       - ~/.Xauthority:/home/rosuser/.Xauthority:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - /dev/shm:/dev/shm # For inter-process communication, often used by ROS/Gazebo
-      # Mount the tmuxinator config file from its new location
+      - /dev/shm:/dev/shm
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
       - ./custom_servo_demo:/home/rosuser/moveit_ws/src/custom_servo_demo
       - ./manipulator_action_interfaces:/home/rosuser/moveit_ws/src/manipulator_action_interfaces
       - ./manipulator_actions:/home/rosuser/moveit_ws/src/manipulator_actions
-      - colcon_build:/home/rosuser/moveit_ws/build
-      - colcon_install:/home/rosuser/moveit_ws/install
-      - colcon_log:/home/rosuser/moveit_ws/log
+      - colcon_build_jazzy:/home/rosuser/moveit_ws/build
+      - colcon_install_jazzy:/home/rosuser/moveit_ws/install
+      - colcon_log_jazzy:/home/rosuser/moveit_ws/log
     # The default command from the Dockerfile (bash) will be used.
 
 volumes:
-  colcon_build:
-  colcon_install:
-  colcon_log:
+  colcon_build_jazzy:
+  colcon_install_jazzy:
+  colcon_log_jazzy:
