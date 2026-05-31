@@ -6,9 +6,35 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 import sys
 import os
+from urllib.parse import unquote, urlparse
 
 
 class CORSRequestHandler(SimpleHTTPRequestHandler):
+    serve_directory = os.getcwd()
+
+    def translate_path(self, path):
+        parsed_path = urlparse(path).path
+        decoded_path = unquote(parsed_path)
+        normalized_path = decoded_path.lstrip("/")
+
+        if normalized_path.startswith("file:"):
+            normalized_path = normalized_path[len("file:"):]
+            while normalized_path.startswith("//"):
+                normalized_path = normalized_path[1:]
+
+        if os.path.isabs(normalized_path):
+            absolute_path = os.path.normpath(normalized_path)
+            serve_directory = os.path.normpath(self.serve_directory)
+            if absolute_path == serve_directory:
+                normalized_path = ""
+            elif absolute_path.startswith(serve_directory + os.sep):
+                normalized_path = os.path.relpath(absolute_path, serve_directory)
+
+        return os.path.join(
+            self.serve_directory,
+            *[part for part in normalized_path.split("/") if part and part not in (".", "..")],
+        )
+
     def end_headers(self):
         # Comprehensive CORS headers
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -68,7 +94,8 @@ if __name__ == "__main__":
         serve_directory = sys.argv[2]
     
     if os.path.exists(serve_directory):
-        os.chdir(serve_directory)
+        serve_directory = os.path.abspath(serve_directory)
+        CORSRequestHandler.serve_directory = serve_directory
         print(f"Starting CORS-enabled HTTP server for meshes on port {port} from {serve_directory} ...")
     else:
         print(f"Directory {serve_directory} does not exist, serving from current directory")

@@ -28,6 +28,7 @@ find_package(Eigen3 REQUIRED)
 foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
 endforeach()
+find_package(rclpy REQUIRED)
 
 include_directories(
   include
@@ -36,6 +37,11 @@ include_directories(
 # Install launch, config directories
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
+install(PROGRAMS
+  scripts/robot_description_republisher.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME robot_description_republisher
+)
 
 ament_export_dependencies(${THIS_PACKAGE_INCLUDE_DEPENDS})
 

@@ -96,6 +96,17 @@ def generate_launch_description():
         output="screen",
     )
 
+    robot_description_republisher = launch_ros.actions.Node(
+        package="custom_servo_demo",
+        executable="robot_description_republisher",
+        name="robot_description_republisher",
+        parameters=[
+            moveit_config.robot_description,
+            {"publish_period": 1.0},
+        ],
+        output="screen",
+    )
+
     pose_demo_node = launch_ros.actions.Node(
         package="moveit_servo",
         executable="demo_pose",
@@ -119,5 +130,6 @@ def generate_launch_description():
             panda_arm_controller_spawner,
             pose_demo_node,
             container,
+            robot_description_republisher,
         ]
     )
