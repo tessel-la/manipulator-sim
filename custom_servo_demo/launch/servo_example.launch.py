@@ -23,6 +23,9 @@ def generate_launch_description():
         "launch_as_standalone_node", default="false"
     )
     use_gazebo_camera = LaunchConfiguration("use_gazebo_camera", default="true")
+    use_joy_teleop = LaunchConfiguration("use_joy_teleop", default="false")
+    launch_joy_node = LaunchConfiguration("launch_joy_node", default="false")
+    joy_dev = LaunchConfiguration("joy_dev", default="/dev/input/js0")
 
     servo_params = {
         "moveit_servo": ParameterBuilder("custom_servo_demo")
@@ -130,6 +133,36 @@ def generate_launch_description():
         output="screen",
     )
 
+    joy_node = launch_ros.actions.Node(
+        package="joy",
+        executable="joy_node",
+        name="joy_node",
+        parameters=[
+            {
+                "dev": joy_dev,
+                "deadzone": 0.05,
+                "autorepeat_rate": 20.0,
+            }
+        ],
+        output="screen",
+        condition=IfCondition(launch_joy_node),
+    )
+
+    joy_to_servo_twist = launch_ros.actions.Node(
+        package="custom_servo_demo",
+        executable="joy_to_servo_twist",
+        name="joy_to_servo_twist",
+        parameters=[
+            {
+                "joy_topic": "/joy",
+                "twist_topic": "/servo_node/delta_twist_cmds",
+                "frame_id": "panda_link0",
+            }
+        ],
+        output="screen",
+        condition=IfCondition(use_joy_teleop),
+    )
+
     gazebo_wrist_camera = launch.actions.IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -165,6 +198,21 @@ def generate_launch_description():
                 default_value="true",
                 description="Launch the Gazebo wrist camera PoC stream",
             ),
+            launch.actions.DeclareLaunchArgument(
+                "use_joy_teleop",
+                default_value="false",
+                description="Relay sensor_msgs/msg/Joy input to MoveIt Servo twist commands",
+            ),
+            launch.actions.DeclareLaunchArgument(
+                "launch_joy_node",
+                default_value="false",
+                description="Launch joy_node for a physical joystick",
+            ),
+            launch.actions.DeclareLaunchArgument(
+                "joy_dev",
+                default_value="/dev/input/js0",
+                description="Linux joystick device used when launch_joy_node is true",
+            ),
             rviz_node,
             ros2_control_node,
             joint_state_broadcaster_spawner,
@@ -172,6 +220,8 @@ def generate_launch_description():
             servo_node,
             container,
             robot_description_republisher,
+            joy_node,
+            joy_to_servo_twist,
             gazebo_wrist_camera,
         ]
     )

@@ -44,6 +44,11 @@ install(PROGRAMS
   RENAME robot_description_republisher
 )
 install(PROGRAMS
+  scripts/joy_to_servo_twist.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME joy_to_servo_twist
+)
+install(PROGRAMS
   scripts/gazebo_wrist_camera_follower.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME gazebo_wrist_camera_follower

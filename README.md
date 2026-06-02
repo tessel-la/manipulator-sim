@@ -84,7 +84,7 @@ Once inside the container's bash shell, start the simulation helper:
 ```
 
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
-1.  **moveit_launch**: Runs `ros2 launch custom_servo_demo servo_example.launch.py`
+1.  **moveit_launch**: Runs `ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true`
 2.  **prepare_servo**: Selects Twist command mode with `/servo_node/switch_command_type` and unpauses Servo with `/servo_node/pause_servo`.
 3.  **servo_keyboard_input**: Runs `ros2 run moveit_servo servo_keyboard_input` for teleoperation.
 4.  **manipulator_actions**: Runs `ros2 run manipulator_actions action_server`.
@@ -111,6 +111,46 @@ ros2 run manipulator_actions manipulator_cli sequence run demo_pick
 ```
 
 Directions are expressed in the Panda base frame: `forward/back` map to X, `left/right` map to Y, and `up/down` map to Z. The `yaw` argument is an angle in radians around the base Z axis.
+
+### Joystick / `sensor_msgs/msg/Joy` Control
+
+The Servo launch file can also relay `sensor_msgs/msg/Joy` input into the arm's MoveIt Servo twist topic:
+
+```bash
+ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true
+```
+
+The default tmux setup already enables this bridge. It listens on `/joy` and publishes to `/servo_node/delta_twist_cmds` only while non-zero joystick input is active, then sends one zero command when the input is released.
+
+Default axis mapping:
+
+-   `axes[1]`: base-frame X velocity, forward/back
+-   `axes[0]`: base-frame Y velocity, left/right
+-   `axes[4]`: base-frame Z velocity, up/down
+-   `axes[3]`: base-frame yaw velocity
+
+To test with a synthetic Joy message:
+
+```bash
+ros2 topic pub -r 20 /joy sensor_msgs/msg/Joy "{axes: [0.0, 0.5, 0.0, 0.0, 0.0], buttons: []}"
+```
+
+For a physical joystick, launch the ROS `joy_node` as well:
+
+```bash
+ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true launch_joy_node:=true joy_dev:=/dev/input/js0
+```
+
+You can also run only the bridge after the simulation is up:
+
+```bash
+ros2 run custom_servo_demo joy_to_servo_twist --ros-args \
+  -p joy_topic:=/joy \
+  -p twist_topic:=/servo_node/delta_twist_cmds \
+  -p enable_button:=4
+```
+
+Set `enable_button` to a button index if you want a deadman button; the default `-1` accepts Joy commands without a button press.
 
 Reusable routines live in `manipulator_actions/config/sequences/*.yaml`:
 

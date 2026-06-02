@@ -7,7 +7,7 @@ windows:
       panes:
         - moveit_launch:
             - echo "Launching Panda MoveIt Servo Example..."
-            - ros2 launch custom_servo_demo servo_example.launch.py
+            - ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true
         - prepare_servo:
             # These commands need the servo_node from the first pane to be up.
             - echo "Waiting for servo_node to initialize..."
