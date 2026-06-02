@@ -6,15 +6,14 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 import sys
 import os
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlsplit
 
 
 class CORSRequestHandler(SimpleHTTPRequestHandler):
     serve_directory = os.getcwd()
 
     def translate_path(self, path):
-        parsed_path = urlparse(path).path
-        decoded_path = unquote(parsed_path)
+        decoded_path = unquote(urlsplit(path).path)
         normalized_path = decoded_path.lstrip("/")
 
         if normalized_path.startswith("file:"):

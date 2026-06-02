@@ -70,6 +70,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-pluginlib \
     ros-${ROS_DISTRO}-realtime-tools \
     ros-${ROS_DISTRO}-robot-state-publisher \
+    ros-${ROS_DISTRO}-ros-gz-bridge \
+    ros-${ROS_DISTRO}-ros-gz-sim \
     ros-${ROS_DISTRO}-ros-base \
     ros-${ROS_DISTRO}-ros2-control \
     ros-${ROS_DISTRO}-rosidl-default-generators \

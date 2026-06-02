@@ -15,6 +15,8 @@ services:
       - XAUTHORITY=/home/rosuser/.Xauthority
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
       - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-1}
       - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions}
     volumes:
@@ -22,6 +24,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/shm:/dev/shm
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
+      - ./cors_mesh_server.py:/home/rosuser/cors_mesh_server.py:ro
       - ./custom_servo_demo:/home/rosuser/moveit_ws/src/custom_servo_demo
       - ./manipulator_action_interfaces:/home/rosuser/moveit_ws/src/manipulator_action_interfaces
       - ./manipulator_actions:/home/rosuser/moveit_ws/src/manipulator_actions

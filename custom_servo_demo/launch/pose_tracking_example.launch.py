@@ -3,11 +3,16 @@ import os
 import launch
 import launch_ros
 from ament_index_python.packages import get_package_share_directory
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_param_builder import ParameterBuilder
 from moveit_configs_utils import MoveItConfigsBuilder
 
 
 def generate_launch_description():
+    use_gazebo_camera = LaunchConfiguration("use_gazebo_camera", default="true")
+
     moveit_config = (
         MoveItConfigsBuilder("moveit_resources_panda")
         .robot_description(file_path="config/panda.urdf.xacro")
@@ -107,6 +112,17 @@ def generate_launch_description():
         output="screen",
     )
 
+    gazebo_wrist_camera = launch.actions.IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("custom_servo_demo"),
+                "launch",
+                "gazebo_wrist_camera.launch.py",
+            )
+        ),
+        condition=IfCondition(use_gazebo_camera),
+    )
+
     pose_demo_node = launch_ros.actions.Node(
         package="moveit_servo",
         executable="demo_pose",
@@ -124,6 +140,11 @@ def generate_launch_description():
 
     return launch.LaunchDescription(
         [
+            launch.actions.DeclareLaunchArgument(
+                "use_gazebo_camera",
+                default_value="true",
+                description="Launch the Gazebo wrist camera PoC stream",
+            ),
             rviz_node,
             ros2_control_node,
             joint_state_broadcaster_spawner,
@@ -131,5 +152,6 @@ def generate_launch_description():
             pose_demo_node,
             container,
             robot_description_republisher,
+            gazebo_wrist_camera,
         ]
     )

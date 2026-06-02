@@ -37,10 +37,16 @@ include_directories(
 # Install launch, config directories
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY worlds DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS
   scripts/robot_description_republisher.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME robot_description_republisher
+)
+install(PROGRAMS
+  scripts/gazebo_wrist_camera_follower.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME gazebo_wrist_camera_follower
 )
 
 ament_export_dependencies(${THIS_PACKAGE_INCLUDE_DEPENDS})
