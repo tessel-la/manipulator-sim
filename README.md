@@ -83,14 +83,37 @@ Once inside the container's bash shell, start the simulation helper:
 /home/rosuser/start_simulation.sh
 ```
 
+By default, this starts one arm as `/arm_1`. Spawn more arms through the same helper:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 2
+```
+
+If the tmux session is already running, restart it so the new arm count is applied:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 2 --restart
+```
+
+The Gazebo wrist-camera setup supports up to three arms. For higher counts, disable that pane:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 4 --no-gazebo-camera --restart
+```
+
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
-1.  **moveit_launch**: Runs `ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true`
-2.  **prepare_servo**: Selects Twist command mode with `/servo_node/switch_command_type` and unpauses Servo with `/servo_node/pause_servo`.
-3.  **servo_keyboard_input**: Runs `ros2 run moveit_servo servo_keyboard_input` for teleoperation.
-4.  **manipulator_actions**: Runs `ros2 run manipulator_actions action_server`.
-5.  **cors_mesh_server**: Serves installed ROS mesh assets from `/opt/ros/${ROS_DISTRO}/share` on port 8000.
+1.  **multi_servo_launch**: Runs `ros2 launch custom_servo_demo multi_servo_example.launch.py` with `ARM_COUNT=1` and `ARM_PREFIX=arm` by default, creating `/arm_1`.
+2.  **wrist_cameras**: Runs `ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py` with the same arm count/prefix, exposing one Gazebo wrist camera per arm namespace.
+3.  **cors_mesh_server**: Serves installed ROS mesh assets from `/opt/ros/${ROS_DISTRO}/share` on port 8000.
 
 Your terminal will now be attached to this tmux session.
+
+You can also override other startup defaults through helper options or environment variables:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 2 --arm-prefix robot --no-gazebo-camera
+ARM_COUNT=2 ARM_PREFIX=robot USE_GAZEBO_CAMERA=false /home/rosuser/start_simulation.sh
+```
 
 ### 5. Controlling the Robot with Actions
 
@@ -151,6 +174,68 @@ ros2 run custom_servo_demo joy_to_servo_twist --ros-args \
 ```
 
 Set `enable_button` to a button index if you want a deadman button; the default `-1` accepts Joy commands without a button press.
+
+### Multiple Arms In One Scene
+
+You can launch multiple Panda arms in one shared RViz/TF scene. The launch generates one aggregate `/robot_description` with prefixed links and joints such as `arm_1_panda_link0`, `arm_2_panda_link0`, and `arm_3_panda_link0`, then keeps Servo, controller managers, Joy bridges, and action servers under per-arm namespaces:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 3 --restart
+```
+
+For more than three arms, disable the Gazebo wrist-camera pane:
+
+```bash
+/home/rosuser/start_simulation.sh --arm-count 4 --no-gazebo-camera --restart
+```
+
+If you are launching ROS directly instead of using the helper, pass the same count as a launch argument:
+
+```bash
+ros2 launch custom_servo_demo multi_servo_example.launch.py arm_count:=3
+```
+
+Useful namespaced interfaces:
+
+-   `/robot_description`
+-   `/joint_states`
+-   `/arm_1/robot_description`
+-   `/arm_1/servo_node/delta_twist_cmds`
+-   `/arm_1/servo_node/switch_command_type`
+-   `/arm_1/servo_node/pause_servo`
+-   `/arm_1/joy`
+-   `/arm_1/move_end_effector`
+-   `/arm_1/run_sequence`
+-   `/arm_1/wrist_camera/image_raw`
+-   `/arm_1/wrist_camera/camera_info`
+
+For example, move the second arm with a synthetic Joy message:
+
+```bash
+ros2 topic pub -r 20 /arm_2/joy sensor_msgs/msg/Joy "{axes: [0.0, 0.5, 0.0, 0.0, 0.0], buttons: []}"
+```
+
+The launch accepts:
+
+-   `arm_count`: number of arms in the shared scene, default `1`
+-   `arm_prefix`: namespace prefix, default `arm`
+-   `arm_spacing`: Y-axis distance between adjacent bases, default `0.9`
+-   `use_joy_teleop`: launch one Joy bridge per arm, default `true`
+-   `launch_action_servers`: launch one action server per arm, default `true`
+-   `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
+-   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
+-   `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
+
+The startup helper maps these launch arguments from options and environment variables:
+
+-   `--arm-count` / `ARM_COUNT`: defaults to `1`
+-   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
+-   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
+-   `USE_JOY_TELEOP`: defaults to `true`
+-   `LAUNCH_ACTION_SERVERS`: defaults to `true`
+-   `PREPARE_SERVO`: defaults to `true`
+
+This is one RViz/ROS-control simulation scene with prefixed robot models and a shared global TF tree. The Gazebo process is still the existing wrist-camera/world helper, not three separate Gazebo robot simulations.
 
 Reusable routines live in `manipulator_actions/config/sequences/*.yaml`:
 

@@ -62,8 +62,14 @@ class RobotDescriptionRepublisher(Node):
     def _start_publishing(self, description, publish_period):
         self._message = String()
         self._message.data = description
-        self._timer = self.create_timer(publish_period, self._publish_description)
         self._publish_description()
+        if publish_period <= 0.0:
+            self.get_logger().info(
+                f"Published robot_description on {self._topic_name} with transient-local QoS"
+            )
+            return
+
+        self._timer = self.create_timer(publish_period, self._publish_description)
         self.get_logger().info(
             f"Publishing robot_description on {self._topic_name} every {publish_period:.2f}s"
         )

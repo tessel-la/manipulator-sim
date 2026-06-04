@@ -24,6 +24,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/shm:/dev/shm
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
+      - ./docker/scripts/start_simulation.sh:/home/rosuser/start_simulation.sh:ro
       - ./cors_mesh_server.py:/home/rosuser/cors_mesh_server.py:ro
       - ./custom_servo_demo:/home/rosuser/moveit_ws/src/custom_servo_demo
       - ./manipulator_action_interfaces:/home/rosuser/moveit_ws/src/manipulator_action_interfaces

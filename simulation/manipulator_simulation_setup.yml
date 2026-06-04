@@ -2,28 +2,15 @@ name: manipulator_simulation_setup
 # root: ~/moveit_ws # You can uncomment this if your commands need a specific working directory, though absolute paths in commands are safer.
 
 windows:
-  - moveit_servo_simulation:
+  - multi_manipulator_simulation:
       layout: tiled # Arranges panes; other options: even-horizontal, main-vertical, etc.
       panes:
-        - moveit_launch:
-            - echo "Launching Panda MoveIt Servo Example..."
-            - ros2 launch custom_servo_demo servo_example.launch.py use_joy_teleop:=true
-        - prepare_servo:
-            # These commands need the servo_node from the first pane to be up.
-            - echo "Waiting for servo_node to initialize..."
-            - sleep 3
-            - echo "Selecting Twist command mode and unpausing Servo..."
-            - 'ros2 service call /servo_node/switch_command_type moveit_msgs/srv/ServoCommandType "{command_type: 1}"'
-            - 'ros2 service call /servo_node/pause_servo std_srvs/srv/SetBool "{data: false}"'
-        - servo_keyboard_input:
-            - echo "Waiting a bit more before starting keyboard input..."
-            - sleep 3 # Ensure servo is started
-            - echo "Starting keyboard input for servo..."
-            - ros2 run moveit_servo servo_keyboard_input
-        - manipulator_actions:
-            - echo "Waiting for Servo before starting manipulator action server..."
-            - sleep 4
-            - ros2 run manipulator_actions action_server
+        - multi_servo_launch:
+            - echo "Launching ${ARM_COUNT:-1} namespaced Panda Servo stacks..."
+            - ros2 launch custom_servo_demo multi_servo_example.launch.py arm_count:=${ARM_COUNT:-1} arm_prefix:=${ARM_PREFIX:-arm} use_joy_teleop:=${USE_JOY_TELEOP:-true} launch_action_servers:=${LAUNCH_ACTION_SERVERS:-true} prepare_servo:=${PREPARE_SERVO:-true}
+        - wrist_cameras:
+            - echo "Launching Gazebo wrist cameras for ${ARM_COUNT:-1} namespaced arm(s)..."
+            - ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py arm_count:=${ARM_COUNT:-1} arm_prefix:=${ARM_PREFIX:-arm} enabled:=${USE_GAZEBO_CAMERA:-true}
         - cors_mesh_server:
             - echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/${ROS_DISTRO:-jazzy}/share/ ..."
             - python3 /home/rosuser/cors_mesh_server.py 8000 /opt/ros/${ROS_DISTRO:-jazzy}/share/

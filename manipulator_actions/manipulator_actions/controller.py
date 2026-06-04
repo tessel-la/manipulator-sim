@@ -37,9 +37,9 @@ class ServoMotionController:
         node: Node,
         base_frame: str = "panda_link0",
         ee_frame: str = "panda_link8",
-        twist_topic: str = "/servo_node/delta_twist_cmds",
-        pause_servo_service: str = "/servo_node/pause_servo",
-        switch_command_type_service: str = "/servo_node/switch_command_type",
+        twist_topic: str = "servo_node/delta_twist_cmds",
+        pause_servo_service: str = "servo_node/pause_servo",
+        switch_command_type_service: str = "servo_node/switch_command_type",
         publish_hz: float = 20.0,
         limits: Optional[MotionLimits] = None,
     ) -> None:

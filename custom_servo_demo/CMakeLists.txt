@@ -49,6 +49,11 @@ install(PROGRAMS
   RENAME joy_to_servo_twist
 )
 install(PROGRAMS
+  scripts/servo_command_preparer.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME servo_command_preparer
+)
+install(PROGRAMS
   scripts/gazebo_wrist_camera_follower.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME gazebo_wrist_camera_follower

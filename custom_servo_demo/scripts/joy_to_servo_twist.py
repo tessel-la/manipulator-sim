@@ -14,8 +14,8 @@ class JoyToServoTwist(Node):
     def __init__(self):
         super().__init__("joy_to_servo_twist")
 
-        self.declare_parameter("joy_topic", "/joy")
-        self.declare_parameter("twist_topic", "/servo_node/delta_twist_cmds")
+        self.declare_parameter("joy_topic", "joy")
+        self.declare_parameter("twist_topic", "servo_node/delta_twist_cmds")
         self.declare_parameter("frame_id", "panda_link0")
         self.declare_parameter("publish_hz", 50.0)
         self.declare_parameter("stale_timeout", 0.5)
