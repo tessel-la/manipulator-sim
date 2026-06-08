@@ -1,6 +1,11 @@
 Panels:
   - Class: rviz_common/Displays
+    Help Height: 70
     Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.5
+    Tree Height: 772
 Visualization Manager:
   Class: ""
   Displays:
@@ -9,28 +14,162 @@ Visualization Manager:
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
       Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
       Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
       Plane: XY
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Class: rviz_default_plugins/RobotModel
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
       Description Source: Topic
       Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
         Value: /robot_description
       Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        arm_1_panda_hand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_leftfinger:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link4:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link5:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link6:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link7:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_1_panda_link8:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        arm_1_panda_rightfinger:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        world:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+      Mass Properties:
+        Inertia: false
+        Mass: false
       Name: MultiArmRobot
+      TF Prefix: ""
+      Update Interval: 0
       Value: true
+      Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
       Frame Timeout: 15
       Frames:
         All Enabled: false
-      Marker Scale: 0.4
+        arm_1_panda_hand:
+          Value: true
+        arm_1_panda_leftfinger:
+          Value: true
+        arm_1_panda_link0:
+          Value: true
+        arm_1_panda_link1:
+          Value: true
+        arm_1_panda_link2:
+          Value: true
+        arm_1_panda_link3:
+          Value: true
+        arm_1_panda_link4:
+          Value: true
+        arm_1_panda_link5:
+          Value: true
+        arm_1_panda_link6:
+          Value: true
+        arm_1_panda_link7:
+          Value: true
+        arm_1_panda_link8:
+          Value: true
+        arm_1_panda_rightfinger:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 0.4000000059604645
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
+      Tree:
+        world:
+          arm_1_panda_link0:
+            arm_1_panda_link1:
+              arm_1_panda_link2:
+                arm_1_panda_link3:
+                  arm_1_panda_link4:
+                    arm_1_panda_link5:
+                      arm_1_panda_link6:
+                        arm_1_panda_link7:
+                          arm_1_panda_link8:
+                            arm_1_panda_hand:
+                              arm_1_panda_leftfinger:
+                                {}
+                              arm_1_panda_rightfinger:
+                                {}
       Update Interval: 0
       Value: true
   Enabled: true
@@ -41,22 +180,44 @@ Visualization Manager:
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
     - Class: rviz_default_plugins/FocusCamera
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
   Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.0
+      Distance: 3
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
       Focal Point:
         X: 0
         Y: 0
-        Z: 0.45
+        Z: 0.44999998807907104
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
       Name: Current View
-      Pitch: 0.55
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.550000011920929
       Target Frame: world
-      Yaw: 4.7
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 4.699999809265137
+    Saved: ~
 Window Geometry:
-  Height: 900
-  Width: 1400
+  Displays:
+    collapsed: true
+  Height: 987
+  Hide Left Dock: true
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000001000000000000015600000385fc0200000001fb000000100044006900730070006c006100790073000000003b00000385000000c700ffffff0000026a0000038500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Width: 618
+  X: 1294
+  Y: 48

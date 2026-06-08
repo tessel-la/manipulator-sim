@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Callable, Optional, Tuple
 
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from moveit_msgs.srv import ServoCommandType
 import rclpy
 from rclpy.duration import Duration
@@ -41,12 +41,14 @@ class ServoMotionController:
         pause_servo_service: str = "servo_node/pause_servo",
         switch_command_type_service: str = "servo_node/switch_command_type",
         publish_hz: float = 20.0,
+        tf_timeout_sec: float = 5.0,
         limits: Optional[MotionLimits] = None,
     ) -> None:
         self._node = node
         self.base_frame = base_frame
         self.ee_frame = ee_frame
         self.publish_hz = publish_hz
+        self.tf_timeout_sec = tf_timeout_sec
         self.limits = limits or MotionLimits()
         self._publisher = node.create_publisher(TwistStamped, twist_topic, 10)
         self._pause_client = node.create_client(SetBool, pause_servo_service)
@@ -54,7 +56,19 @@ class ServoMotionController:
             ServoCommandType, switch_command_type_service
         )
         self._tf_buffer = Buffer()
-        self._tf_listener = TransformListener(self._tf_buffer, node)
+        self._tf_node = rclpy.create_node(
+            f"{node.get_name()}_tf_listener",
+            namespace=node.get_namespace(),
+            context=node.context,
+        )
+        self._tf_listener = TransformListener(
+            self._tf_buffer,
+            self._tf_node,
+            spin_thread=True,
+        )
+
+    def destroy(self) -> None:
+        self._tf_node.destroy_node()
 
     def prepare_servo(self, timeout_sec: float = 5.0) -> Tuple[bool, str]:
         """Select Twist input and unpause the Jazzy Servo node."""
@@ -98,11 +112,9 @@ class ServoMotionController:
         return True, response.message or "Servo ready"
 
     def current_pose(self) -> PoseTarget:
-        transform = self._tf_buffer.lookup_transform(
+        transform = self._lookup_transform(
             self.base_frame,
             self.ee_frame,
-            Time(),
-            timeout=Duration(seconds=1.0),
         )
         translation = transform.transform.translation
         rotation = transform.transform.rotation
@@ -111,6 +123,48 @@ class ServoMotionController:
             y=translation.y,
             z=translation.z,
             yaw=yaw_from_quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
+        )
+
+    def target_from_pose_stamped(self, message: PoseStamped) -> PoseTarget:
+        """Convert a PoseStamped target into the controller base frame."""
+        frame_id = message.header.frame_id.strip().lstrip("/")
+        if not frame_id or frame_id == self.base_frame:
+            position = message.pose.position
+            orientation = message.pose.orientation
+            return PoseTarget(
+                x=position.x,
+                y=position.y,
+                z=position.z,
+                yaw=yaw_from_quaternion(
+                    orientation.x,
+                    orientation.y,
+                    orientation.z,
+                    orientation.w,
+                ),
+            )
+
+        transform = self._lookup_transform(
+            self.base_frame,
+            frame_id,
+        ).transform
+        rotation = transform.rotation
+        translation = transform.translation
+        position = message.pose.position
+        orientation = message.pose.orientation
+
+        x, y, z = self._rotate_vector(
+            (rotation.x, rotation.y, rotation.z, rotation.w),
+            (position.x, position.y, position.z),
+        )
+        qx, qy, qz, qw = self._quaternion_multiply(
+            (rotation.x, rotation.y, rotation.z, rotation.w),
+            (orientation.x, orientation.y, orientation.z, orientation.w),
+        )
+        return PoseTarget(
+            x=x + translation.x,
+            y=y + translation.y,
+            z=z + translation.z,
+            yaw=yaw_from_quaternion(qx, qy, qz, qw),
         )
 
     def move_absolute(
@@ -149,7 +203,11 @@ class ServoMotionController:
         try:
             start = self.current_pose()
         except TransformException as exc:
-            return False, f"Could not read current pose: {exc}", PoseTarget(0.0, 0.0, 0.0, 0.0)
+            return (
+                False,
+                f"Could not read current pose: {exc}",
+                PoseTarget(0.0, 0.0, 0.0, 0.0),
+            )
         target = relative_target(start, dx, dy, dz, dyaw)
         return self.move_absolute(
             target=target,
@@ -232,3 +290,67 @@ class ServoMotionController:
         msg.twist.linear.z = vz
         msg.twist.angular.z = wz
         return msg
+
+    def _lookup_transform(self, target_frame: str, source_frame: str):
+        deadline = time.monotonic() + self.tf_timeout_sec
+        last_error: Optional[TransformException] = None
+        while rclpy.ok() and time.monotonic() < deadline:
+            try:
+                return self._tf_buffer.lookup_transform(
+                    target_frame,
+                    source_frame,
+                    Time(),
+                    timeout=Duration(seconds=0.2),
+                )
+            except TransformException as exc:
+                last_error = exc
+                time.sleep(0.05)
+
+        if last_error is not None:
+            raise last_error
+        return self._tf_buffer.lookup_transform(
+            target_frame,
+            source_frame,
+            Time(),
+            timeout=Duration(seconds=0.2),
+        )
+
+    @staticmethod
+    def _quaternion_multiply(
+        left: tuple[float, float, float, float],
+        right: tuple[float, float, float, float],
+    ) -> tuple[float, float, float, float]:
+        lx, ly, lz, lw = ServoMotionController._normalize_quaternion(left)
+        rx, ry, rz, rw = ServoMotionController._normalize_quaternion(right)
+        return (
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+            lw * rw - lx * rx - ly * ry - lz * rz,
+        )
+
+    @staticmethod
+    def _rotate_vector(
+        quaternion: tuple[float, float, float, float],
+        vector: tuple[float, float, float],
+    ) -> tuple[float, float, float]:
+        qx, qy, qz, qw = ServoMotionController._normalize_quaternion(quaternion)
+        vx, vy, vz = vector
+        tx = 2.0 * (qy * vz - qz * vy)
+        ty = 2.0 * (qz * vx - qx * vz)
+        tz = 2.0 * (qx * vy - qy * vx)
+        return (
+            vx + qw * tx + qy * tz - qz * ty,
+            vy + qw * ty + qz * tx - qx * tz,
+            vz + qw * tz + qx * ty - qy * tx,
+        )
+
+    @staticmethod
+    def _normalize_quaternion(
+        quaternion: tuple[float, float, float, float],
+    ) -> tuple[float, float, float, float]:
+        x, y, z, w = quaternion
+        norm = (x * x + y * y + z * z + w * w) ** 0.5
+        if norm <= 1e-12:
+            return 0.0, 0.0, 0.0, 1.0
+        return x / norm, y / norm, z / norm, w / norm

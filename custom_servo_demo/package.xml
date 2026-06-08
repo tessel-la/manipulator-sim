@@ -41,6 +41,7 @@
   <depend>tf2_ros</depend>
   <depend>trajectory_msgs</depend>
   <depend>moveit_servo</depend>
+  <exec_depend>manipulator_actions</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_interfaces</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>

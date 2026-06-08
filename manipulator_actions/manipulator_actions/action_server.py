@@ -43,6 +43,7 @@ class ManipulatorActionServer(Node):
         self.declare_parameter("position_tolerance", 0.01)
         self.declare_parameter("yaw_tolerance", 0.03)
         self.declare_parameter("timeout", 10.0)
+        self.declare_parameter("tf_timeout", 5.0)
         self.declare_parameter("sequence_directories", "")
 
         self._controller = ServoMotionController(
@@ -54,6 +55,7 @@ class ManipulatorActionServer(Node):
             switch_command_type_service=self.get_parameter(
                 "switch_command_type_service"
             ).value,
+            tf_timeout_sec=float(self.get_parameter("tf_timeout").value),
         )
 
         self._move_server = ActionServer(
@@ -74,6 +76,10 @@ class ManipulatorActionServer(Node):
         )
         self.get_logger().info("Manipulator action server ready")
 
+    def destroy_node(self) -> bool:
+        self._controller.destroy()
+        return super().destroy_node()
+
     def _cancel_callback(self, _cancel_request):
         return CancelResponse.ACCEPT
 
@@ -91,8 +97,16 @@ class ManipulatorActionServer(Node):
 
     def _execute_move(self, goal_handle):
         goal = goal_handle.request
-        position_tolerance = goal.position_tolerance if goal.position_tolerance > 0.0 else self._default_position_tolerance
-        yaw_tolerance = goal.yaw_tolerance if goal.yaw_tolerance > 0.0 else self._default_yaw_tolerance
+        position_tolerance = (
+            goal.position_tolerance
+            if goal.position_tolerance > 0.0
+            else self._default_position_tolerance
+        )
+        yaw_tolerance = (
+            goal.yaw_tolerance
+            if goal.yaw_tolerance > 0.0
+            else self._default_yaw_tolerance
+        )
         timeout = goal.timeout if goal.timeout > 0.0 else self._default_timeout
 
         def publish_feedback(distance: float, yaw_error: float, state: str) -> None:
@@ -163,7 +177,9 @@ class ManipulatorActionServer(Node):
             feedback.current_action = step.kind
             goal_handle.publish_feedback(feedback)
 
-            success, message = self._run_step(step, cancel_requested=lambda: goal_handle.is_cancel_requested)
+            success, message = self._run_step(
+                step, cancel_requested=lambda: goal_handle.is_cancel_requested
+            )
             if not success:
                 if goal_handle.is_cancel_requested:
                     result.success = False

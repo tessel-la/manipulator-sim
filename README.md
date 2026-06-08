@@ -175,9 +175,45 @@ ros2 run custom_servo_demo joy_to_servo_twist --ros-args \
 
 Set `enable_button` to a button index if you want a deadman button; the default `-1` accepts Joy commands without a button press.
 
+### PoseStamped End-Effector Control
+
+The Servo launch file can also listen for `geometry_msgs/msg/PoseStamped` end-effector targets and drive them through the same closed-loop Servo controller used by the actions:
+
+```bash
+ros2 launch custom_servo_demo servo_example.launch.py use_pose_stamped_control:=true
+```
+
+The default tmux setup enables this bridge. It listens for absolute targets on `/end_effector_pose_absolute` and relative base-frame offsets on `/end_effector_pose_relative`. Absolute commands can use the robot base frame or another TF-resolvable `header.frame_id`, such as `world`. The pose position is interpreted as `x/y/z`; the pose orientation is reduced to yaw around the robot base Z axis.
+
+To move to an absolute target:
+
+```bash
+ros2 topic pub --once /end_effector_pose_absolute geometry_msgs/msg/PoseStamped "{header: {frame_id: panda_link0}, pose: {position: {x: 0.45, y: 0.0, z: 0.35}, orientation: {w: 1.0}}}"
+```
+
+To command a relative offset from the current end-effector pose:
+
+```bash
+ros2 topic pub --once /end_effector_pose_relative geometry_msgs/msg/PoseStamped "{header: {frame_id: panda_link0}, pose: {position: {x: 0.05, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}"
+```
+
+You can also run only the bridge after the simulation is up:
+
+```bash
+ros2 run manipulator_actions pose_stamped_control --ros-args \
+  -p absolute_pose_topic:=/end_effector_pose_absolute \
+  -p relative_pose_topic:=/end_effector_pose_relative \
+  -p base_frame:=panda_link0 \
+  -p ee_frame:=panda_link8
+```
+
+If you prefer a single topic, set `pose_topic` and choose its interpretation with `relative:=true` or `relative:=false`.
+
+Do not publish these bridge commands to Servo's native `/servo_node/pose_target_cmds` topic. The bridge intentionally listens on `/end_effector_pose_absolute` and `/end_effector_pose_relative`, then publishes Servo twist commands internally.
+
 ### Multiple Arms In One Scene
 
-You can launch multiple Panda arms in one shared RViz/TF scene. The launch generates one aggregate `/robot_description` with prefixed links and joints such as `arm_1_panda_link0`, `arm_2_panda_link0`, and `arm_3_panda_link0`, then keeps Servo, controller managers, Joy bridges, and action servers under per-arm namespaces:
+You can launch multiple Panda arms in one shared RViz/TF scene. The launch generates one aggregate `/robot_description` with prefixed links and joints such as `arm_1_panda_link0`, `arm_2_panda_link0`, and `arm_3_panda_link0`, then keeps Servo, controller managers, Joy bridges, PoseStamped bridges, and action servers under per-arm namespaces:
 
 ```bash
 /home/rosuser/start_simulation.sh --arm-count 3 --restart
@@ -204,6 +240,8 @@ Useful namespaced interfaces:
 -   `/arm_1/servo_node/switch_command_type`
 -   `/arm_1/servo_node/pause_servo`
 -   `/arm_1/joy`
+-   `/arm_1/end_effector_pose_absolute`
+-   `/arm_1/end_effector_pose_relative`
 -   `/arm_1/move_end_effector`
 -   `/arm_1/run_sequence`
 -   `/arm_1/wrist_camera/image_raw`
@@ -221,6 +259,7 @@ The launch accepts:
 -   `arm_prefix`: namespace prefix, default `arm`
 -   `arm_spacing`: Y-axis distance between adjacent bases, default `0.9`
 -   `use_joy_teleop`: launch one Joy bridge per arm, default `true`
+-   `use_pose_stamped_control`: launch one PoseStamped bridge per arm, default `true`
 -   `launch_action_servers`: launch one action server per arm, default `true`
 -   `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
 -   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
@@ -232,6 +271,7 @@ The startup helper maps these launch arguments from options and environment vari
 -   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
 -   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
 -   `USE_JOY_TELEOP`: defaults to `true`
+-   `USE_POSE_STAMPED_CONTROL`: defaults to `true`
 -   `LAUNCH_ACTION_SERVERS`: defaults to `true`
 -   `PREPARE_SERVO`: defaults to `true`
 

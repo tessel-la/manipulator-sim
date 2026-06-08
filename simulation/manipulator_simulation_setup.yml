@@ -7,7 +7,7 @@ windows:
       panes:
         - multi_servo_launch:
             - echo "Launching ${ARM_COUNT:-1} namespaced Panda Servo stacks..."
-            - ros2 launch custom_servo_demo multi_servo_example.launch.py arm_count:=${ARM_COUNT:-1} arm_prefix:=${ARM_PREFIX:-arm} use_joy_teleop:=${USE_JOY_TELEOP:-true} launch_action_servers:=${LAUNCH_ACTION_SERVERS:-true} prepare_servo:=${PREPARE_SERVO:-true}
+            - ros2 launch custom_servo_demo multi_servo_example.launch.py arm_count:=${ARM_COUNT:-1} arm_prefix:=${ARM_PREFIX:-arm} use_joy_teleop:=${USE_JOY_TELEOP:-true} use_pose_stamped_control:=${USE_POSE_STAMPED_CONTROL:-true} launch_action_servers:=${LAUNCH_ACTION_SERVERS:-true} prepare_servo:=${PREPARE_SERVO:-true}
         - wrist_cameras:
             - echo "Launching Gazebo wrist cameras for ${ARM_COUNT:-1} namespaced arm(s)..."
             - ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py arm_count:=${ARM_COUNT:-1} arm_prefix:=${ARM_PREFIX:-arm} enabled:=${USE_GAZEBO_CAMERA:-true}

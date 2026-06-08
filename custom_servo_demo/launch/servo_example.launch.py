@@ -24,6 +24,10 @@ def generate_launch_description():
     )
     use_gazebo_camera = LaunchConfiguration("use_gazebo_camera", default="true")
     use_joy_teleop = LaunchConfiguration("use_joy_teleop", default="false")
+    use_pose_stamped_control = LaunchConfiguration(
+        "use_pose_stamped_control", default="false"
+    )
+    prepare_servo = LaunchConfiguration("prepare_servo", default="true")
     launch_joy_node = LaunchConfiguration("launch_joy_node", default="false")
     joy_dev = LaunchConfiguration("joy_dev", default="/dev/input/js0")
 
@@ -163,6 +167,46 @@ def generate_launch_description():
         condition=IfCondition(use_joy_teleop),
     )
 
+    servo_command_preparer = launch.actions.TimerAction(
+        period=3.0,
+        actions=[
+            launch_ros.actions.Node(
+                package="custom_servo_demo",
+                executable="servo_command_preparer",
+                name="servo_command_preparer",
+                parameters=[
+                    {
+                        "switch_command_type_service": "/servo_node/switch_command_type",
+                        "pause_servo_service": "/servo_node/pause_servo",
+                        "command_type": 1,
+                        "timeout": 30.0,
+                    }
+                ],
+                condition=IfCondition(prepare_servo),
+                output="screen",
+            )
+        ],
+    )
+
+    pose_stamped_control = launch_ros.actions.Node(
+        package="manipulator_actions",
+        executable="pose_stamped_control",
+        name="pose_stamped_end_effector_control",
+        parameters=[
+            {
+                "base_frame": "panda_link0",
+                "ee_frame": "panda_link8",
+                "twist_topic": "/servo_node/delta_twist_cmds",
+                "pause_servo_service": "/servo_node/pause_servo",
+                "switch_command_type_service": "/servo_node/switch_command_type",
+                "absolute_pose_topic": "/end_effector_pose_absolute",
+                "relative_pose_topic": "/end_effector_pose_relative",
+            }
+        ],
+        output="screen",
+        condition=IfCondition(use_pose_stamped_control),
+    )
+
     gazebo_wrist_camera = launch.actions.IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -204,6 +248,16 @@ def generate_launch_description():
                 description="Relay sensor_msgs/msg/Joy input to MoveIt Servo twist commands",
             ),
             launch.actions.DeclareLaunchArgument(
+                "use_pose_stamped_control",
+                default_value="false",
+                description="Relay geometry_msgs/msg/PoseStamped targets to MoveIt Servo twist commands",
+            ),
+            launch.actions.DeclareLaunchArgument(
+                "prepare_servo",
+                default_value="true",
+                description="Select Twist command mode and unpause Servo after startup",
+            ),
+            launch.actions.DeclareLaunchArgument(
                 "launch_joy_node",
                 default_value="false",
                 description="Launch joy_node for a physical joystick",
@@ -220,8 +274,10 @@ def generate_launch_description():
             servo_node,
             container,
             robot_description_republisher,
+            servo_command_preparer,
             joy_node,
             joy_to_servo_twist,
+            pose_stamped_control,
             gazebo_wrist_camera,
         ]
     )

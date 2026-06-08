@@ -22,6 +22,8 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 ARM_JOINTS = [f"panda_joint{index}" for index in range(1, 8)]
 FINGER_JOINTS = ["panda_finger_joint1", "panda_finger_joint2"]
+
+
 def _prefix_name(prefix, value):
     if not value or value == "world":
         return value
@@ -194,6 +196,7 @@ def _arm_actions(context):
 
     arm_spacing = float(LaunchConfiguration("arm_spacing").perform(context))
     use_joy_teleop = LaunchConfiguration("use_joy_teleop")
+    use_pose_stamped_control = LaunchConfiguration("use_pose_stamped_control")
     launch_action_servers = LaunchConfiguration("launch_action_servers")
     prepare_servo = LaunchConfiguration("prepare_servo")
     use_rviz = LaunchConfiguration("use_rviz")
@@ -284,7 +287,9 @@ def _arm_actions(context):
             )
         }
         arm_joint_limits = _prefixed_joint_limits(moveit_config.joint_limits, namespace)
-        arm_kinematics = _prefixed_kinematics(moveit_config.robot_description_kinematics)
+        arm_kinematics = _prefixed_kinematics(
+            moveit_config.robot_description_kinematics
+        )
         controller_config_path = _controller_config_path(namespace)
 
         actions.extend(
@@ -309,7 +314,10 @@ def _arm_actions(context):
                     namespace=namespace,
                     parameters=[controller_config_path],
                     remappings=[
-                        (f"/{namespace}/controller_manager/robot_description", "robot_description"),
+                        (
+                            f"/{namespace}/controller_manager/robot_description",
+                            "robot_description",
+                        ),
                         (f"/{namespace}/joint_states", "/joint_states"),
                     ],
                     output="screen",
@@ -367,7 +375,7 @@ def _arm_actions(context):
                                     ),
                                     "pause_servo_service": "servo_node/pause_servo",
                                     "command_type": 1,
-                                    "timeout": 10.0,
+                                    "timeout": 30.0,
                                 }
                             ],
                             condition=IfCondition(prepare_servo),
@@ -388,6 +396,27 @@ def _arm_actions(context):
                         }
                     ],
                     condition=IfCondition(use_joy_teleop),
+                    output="screen",
+                ),
+                launch_ros.actions.Node(
+                    package="manipulator_actions",
+                    executable="pose_stamped_control",
+                    namespace=namespace,
+                    name="pose_stamped_end_effector_control",
+                    parameters=[
+                        {
+                            "base_frame": f"{namespace}_panda_link0",
+                            "ee_frame": f"{namespace}_panda_link8",
+                            "twist_topic": "servo_node/delta_twist_cmds",
+                            "pause_servo_service": "servo_node/pause_servo",
+                            "switch_command_type_service": (
+                                "servo_node/switch_command_type"
+                            ),
+                            "absolute_pose_topic": "end_effector_pose_absolute",
+                            "relative_pose_topic": "end_effector_pose_relative",
+                        }
+                    ],
+                    condition=IfCondition(use_pose_stamped_control),
                     output="screen",
                 ),
                 launch_ros.actions.Node(
@@ -437,6 +466,11 @@ def generate_launch_description():
                 "use_joy_teleop",
                 default_value="true",
                 description="Launch a Joy-to-Servo bridge in each arm namespace",
+            ),
+            DeclareLaunchArgument(
+                "use_pose_stamped_control",
+                default_value="true",
+                description="Launch a PoseStamped end-effector bridge in each arm namespace",
             ),
             DeclareLaunchArgument(
                 "launch_action_servers",
