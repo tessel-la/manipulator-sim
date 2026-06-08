@@ -199,8 +199,18 @@ def _arm_actions(context):
     use_pose_stamped_control = LaunchConfiguration("use_pose_stamped_control")
     launch_action_servers = LaunchConfiguration("launch_action_servers")
     prepare_servo = LaunchConfiguration("prepare_servo")
+    behavior_tree_name = LaunchConfiguration("behavior_tree_name").perform(context).strip()
+    behavior_tree_timeout = LaunchConfiguration("behavior_tree_timeout")
     use_rviz = LaunchConfiguration("use_rviz")
     use_gazebo_camera = LaunchConfiguration("use_gazebo_camera")
+    launch_behavior_tree = behavior_tree_name.lower() not in (
+        "",
+        "0",
+        "false",
+        "no",
+        "none",
+        "off",
+    )
 
     namespaces = [f"{arm_prefix}_{index}" for index in range(1, arm_count + 1)]
     poses = _arm_poses(arm_count, arm_spacing)
@@ -440,6 +450,21 @@ def _arm_actions(context):
                 ),
             ]
         )
+        if launch_behavior_tree:
+            actions.append(
+                launch_ros.actions.Node(
+                    package="manipulator_actions",
+                    executable="py_trees_runner",
+                    namespace=namespace,
+                    name="manipulator_py_trees_runner",
+                    arguments=[
+                        behavior_tree_name,
+                        "--timeout",
+                        behavior_tree_timeout,
+                    ],
+                    output="screen",
+                )
+            )
 
     return actions
 
@@ -481,6 +506,16 @@ def generate_launch_description():
                 "prepare_servo",
                 default_value="true",
                 description="Select Twist command mode and unpause each Servo node",
+            ),
+            DeclareLaunchArgument(
+                "behavior_tree_name",
+                default_value="none",
+                description="Optional behavior tree name to run once per arm namespace",
+            ),
+            DeclareLaunchArgument(
+                "behavior_tree_timeout",
+                default_value="60.0",
+                description="Timeout in seconds for optional behavior tree runners",
             ),
             DeclareLaunchArgument(
                 "use_rviz",

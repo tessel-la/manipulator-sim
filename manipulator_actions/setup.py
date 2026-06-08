@@ -11,6 +11,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
         (f"share/{package_name}/config/sequences", glob("config/sequences/*.yaml")),
+        (f"share/{package_name}/config/trees", glob("config/trees/*.yaml")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -24,6 +25,7 @@ setup(
             "action_server = manipulator_actions.action_server:main",
             "manipulator_cli = manipulator_actions.cli:main",
             "pose_stamped_control = manipulator_actions.pose_stamped_control:main",
+            "py_trees_runner = manipulator_actions.py_trees_runner:main",
         ],
     },
 )
