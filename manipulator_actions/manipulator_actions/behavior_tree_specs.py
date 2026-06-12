@@ -22,8 +22,9 @@ SEQUENCE = "sequence"
 SELECTOR = "selector"
 PARALLEL = "parallel"
 RUN_SEQUENCE = "run_sequence"
+IMAGE_CAPTURE = "image_capture"
 COMPOSITE_TYPES = {SEQUENCE, SELECTOR, PARALLEL}
-LEAF_TYPES = {MOVE_ABSOLUTE, MOVE_RELATIVE, WAIT, RUN_SEQUENCE}
+LEAF_TYPES = {MOVE_ABSOLUTE, MOVE_RELATIVE, WAIT, RUN_SEQUENCE, IMAGE_CAPTURE}
 VALID_NODE_TYPES = COMPOSITE_TYPES | LEAF_TYPES
 BACKEND_PY_TREES = "py_trees"
 BACKEND_BEHAVIOR_TREE_CPP = "behavior_tree_cpp"
@@ -131,6 +132,15 @@ def _normalize_leaf(kind: str, params: Mapping[str, Any]) -> Dict[str, Any]:
         if seconds < 0.0:
             raise BehaviorTreeValidationError("Wait seconds must be non-negative")
         return {"seconds": seconds}
+
+    if kind == IMAGE_CAPTURE:
+        topic = params.get("topic", "camera/image_raw")
+        if not isinstance(topic, str) or not topic:
+            raise BehaviorTreeValidationError("image_capture topic must be a non-empty string")
+        timeout = _optional_number(params, "timeout", 5.0)
+        if timeout < 0.0:
+            raise BehaviorTreeValidationError("image_capture timeout must be non-negative")
+        return {"topic": topic, "timeout": timeout}
 
     name = params.get("name")
     if not isinstance(name, str) or not name:
@@ -272,6 +282,7 @@ def _node_to_bt_cpp(spec: BehaviorNodeSpec) -> ET.Element:
         MOVE_RELATIVE: "MoveRelative",
         WAIT: "Wait",
         RUN_SEQUENCE: "RunSequence",
+        IMAGE_CAPTURE: "ImageCapture",
     }
     element = ET.Element(tag_by_kind[spec.kind], {"name": spec.name})
     for key, value in spec.params.items():

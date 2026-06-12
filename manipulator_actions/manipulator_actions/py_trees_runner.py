@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import time
 from typing import Iterable, List, Optional
@@ -13,11 +14,14 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.utilities import remove_ros_args
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
 
 from manipulator_action_interfaces.action import MoveEndEffector, RunSequence
 from manipulator_actions.behavior_tree_specs import (
     BACKEND_BEHAVIOR_TREE_CPP,
     BACKEND_PY_TREES,
+    IMAGE_CAPTURE,
     MOVE_ABSOLUTE,
     MOVE_RELATIVE,
     PARALLEL,
@@ -183,6 +187,42 @@ class RunSequenceAction(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.RUNNING
 
 
+class ImageCapture(py_trees.behaviour.Behaviour):
+    def __init__(self, node: Node, spec: BehaviorNodeSpec) -> None:
+        super().__init__(name=spec.name)
+        self._node = node
+        self._topic = str(spec.params["topic"])
+        self._timeout = float(spec.params.get("timeout", 5.0))
+        self._deadline: Optional[float] = None
+        self._received = False
+        self._subscription = None
+        self.feedback_message = "idle"
+
+    def initialise(self) -> None:
+        self._received = False
+        self._deadline = time.monotonic() + self._timeout if self._timeout > 0.0 else None
+        self.feedback_message = f"waiting for image on {self._topic}"
+        if self._subscription is None:
+            self._subscription = self._node.create_subscription(
+                Image,
+                self._topic,
+                self._on_image,
+                1,
+            )
+
+    def update(self):
+        if self._received:
+            self.feedback_message = f"captured image from {self._topic}"
+            return py_trees.common.Status.SUCCESS
+        if self._deadline is not None and time.monotonic() > self._deadline:
+            self.feedback_message = f"timed out waiting for {self._topic}"
+            return py_trees.common.Status.FAILURE
+        return py_trees.common.Status.RUNNING
+
+    def _on_image(self, _message: Image) -> None:
+        self._received = True
+
+
 def build_py_tree(node: Node, spec: BehaviorNodeSpec):
     if spec.kind == SEQUENCE:
         composite = py_trees.composites.Sequence(
@@ -205,6 +245,8 @@ def build_py_tree(node: Node, spec: BehaviorNodeSpec):
         return MoveEndEffectorAction(node, spec)
     elif spec.kind == RUN_SEQUENCE:
         return RunSequenceAction(node, spec)
+    elif spec.kind == IMAGE_CAPTURE:
+        return ImageCapture(node, spec)
     else:
         return TimedWait(spec)
 
@@ -220,6 +262,22 @@ class PyTreesRunner(Node):
         self._timeout = max(timeout, 0.0)
         self._root = build_py_tree(self, spec.root)
         self._tree = py_trees.trees.BehaviourTree(self._root)
+        self._catalog_pub = self.create_publisher(
+            String,
+            "behavior_tree/runtime/nodes",
+            10,
+        )
+        self._status_pub = self.create_publisher(
+            String,
+            "behavior_tree/runtime/status",
+            10,
+        )
+        self._tree_pub = self.create_publisher(
+            String,
+            "behavior_tree/runtime/tree",
+            10,
+        )
+        self._publish_runtime_tree()
 
     def run(self) -> int:
         self.get_logger().info(f"Running behavior tree '{self._spec.name}'")
@@ -229,12 +287,15 @@ class PyTreesRunner(Node):
         while rclpy.ok():
             self._tree.tick()
             rclpy.spin_once(self, timeout_sec=0.0)
+            self._publish_runtime_status()
 
             if self._root.status == py_trees.common.Status.SUCCESS:
                 self.get_logger().info(f"Behavior tree '{self._spec.name}' succeeded")
+                self._publish_runtime_status()
                 return 0
             if self._root.status == py_trees.common.Status.FAILURE:
                 self.get_logger().error(f"Behavior tree '{self._spec.name}' failed")
+                self._publish_runtime_status()
                 return 1
             if deadline is not None and time.monotonic() > deadline:
                 self.get_logger().error(f"Behavior tree '{self._spec.name}' timed out")
@@ -242,6 +303,57 @@ class PyTreesRunner(Node):
             time.sleep(period)
 
         return 1
+
+    def _walk_runtime_nodes(self, behaviour, parent_id: Optional[str] = None, path: Optional[List[str]] = None):
+        path = path or []
+        name = str(behaviour.name)
+        node_id = "/".join([*path, name])
+        status = str(behaviour.status.name) if behaviour.status is not None else "IDLE"
+        node = {
+            "id": node_id,
+            "name": name,
+            "type": behaviour.__class__.__name__,
+            "status": status,
+            "treeId": self._spec.name,
+            "path": node_id,
+            "source": "py_trees",
+        }
+        if parent_id is not None:
+            node["parentId"] = parent_id
+
+        nodes = [node]
+        for child in getattr(behaviour, "children", []) or []:
+            nodes.extend(self._walk_runtime_nodes(child, node_id, [*path, name]))
+        return nodes
+
+    def _publish_json(self, publisher, payload: dict) -> None:
+        message = String()
+        message.data = json.dumps(payload, separators=(",", ":"))
+        publisher.publish(message)
+
+    def _publish_runtime_tree(self) -> None:
+        nodes = self._walk_runtime_nodes(self._root)
+        self._publish_json(
+            self._catalog_pub,
+            {
+                "trees": [
+                    {
+                        "id": self._spec.name,
+                        "name": self._spec.name,
+                        "engine": self._spec.backend,
+                        "nodes": nodes,
+                    }
+                ]
+            },
+        )
+        message = String()
+        message.data = behavior_tree_cpp_xml(self._spec)
+        self._tree_pub.publish(message)
+
+    def _publish_runtime_status(self) -> None:
+        nodes = self._walk_runtime_nodes(self._root)
+        self._publish_json(self._status_pub, {"nodes": {node["id"]: node["status"] for node in nodes}})
+        self._publish_runtime_tree()
 
 
 def build_parser() -> argparse.ArgumentParser:

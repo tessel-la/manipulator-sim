@@ -448,6 +448,14 @@ def _arm_actions(context):
                     condition=IfCondition(launch_action_servers),
                     output="screen",
                 ),
+                launch_ros.actions.Node(
+                    package="manipulator_actions",
+                    executable="behavior_tree_runtime_server",
+                    namespace=namespace,
+                    name="behavior_tree_runtime_server",
+                    condition=IfCondition(launch_action_servers),
+                    output="screen",
+                ),
             ]
         )
         if launch_behavior_tree:
