@@ -60,6 +60,7 @@ class ServoMotionController:
             f"{node.get_name()}_tf_listener",
             namespace=node.get_namespace(),
             context=node.context,
+            use_global_arguments=False,
         )
         self._tf_listener = TransformListener(
             self._tf_buffer,

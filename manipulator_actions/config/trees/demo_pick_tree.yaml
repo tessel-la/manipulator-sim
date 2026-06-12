@@ -1,0 +1,19 @@
+name: demo_pick_tree
+backend: py_trees
+root:
+  sequence:
+    name: demo_pick_tree
+    memory: true
+    children:
+      - move_relative:
+          name: lift
+          up: 0.05
+      - wait:
+          name: settle
+          seconds: 0.5
+      - move_absolute:
+          name: return_home
+          x: 0.45
+          y: 0.0
+          z: 0.35
+          yaw: 0.0

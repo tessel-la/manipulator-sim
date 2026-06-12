@@ -9,7 +9,7 @@ This repository provides a robotic arm simulation environment specifically confi
 
 -   **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Jazzy on Ubuntu Noble.
 -   **Panda Robot**: Currently focused on the Franka Emika Panda robot simulation.
--   **Reusable Action Control**: Provides ROS2 actions, a CLI, and YAML sequences for absolute and relative end-effector moves.
+-   **Reusable Action Control**: Provides ROS2 actions, a CLI, YAML sequences, and basic behavior trees for absolute and relative end-effector moves.
 -   **Automated Startup**: Uses `tmuxinator` and Docker Compose to automatically launch necessary ROS nodes in a structured tmux session upon container startup.
 
 ## Prerequisites
@@ -26,7 +26,7 @@ This repository provides a robotic arm simulation environment specifically confi
 ├── docker-compose.yml         # Configures the Docker container services and automated startup.
 ├── custom_servo_demo/         # MoveIt Servo launch/config for the Panda simulation.
 ├── manipulator_action_interfaces/ # ROS2 action definitions for motion commands and sequences.
-├── manipulator_actions/       # Python action server, CLI, motion helpers, and YAML sequences.
+├── manipulator_actions/       # Python action server, CLI, motion helpers, YAML sequences, and behavior trees.
 ├── simulation/
 │   └── manipulator_simulation_setup.yml # Tmuxinator config for launching ROS nodes.
 └── README.md                  # This file.
@@ -134,6 +134,57 @@ ros2 run manipulator_actions manipulator_cli sequence run demo_pick
 ```
 
 Directions are expressed in the Panda base frame: `forward/back` map to X, `left/right` map to Y, and `up/down` map to Z. The `yaw` argument is an angle in radians around the base Z axis.
+
+### Behavior Trees
+
+Basic behavior trees live in `manipulator_actions/config/trees/*.yaml` and currently run through `py_trees`. The YAML format is intentionally backend-neutral so the same tree descriptions can later be exported or adapted to BehaviorTree.CPP:
+
+```yaml
+name: demo_pick_tree
+backend: py_trees
+root:
+  sequence:
+    name: demo_pick_tree
+    memory: true
+    children:
+      - move_relative:
+          name: lift
+          up: 0.05
+      - wait:
+          name: settle
+          seconds: 0.5
+      - move_absolute:
+          name: return_home
+          x: 0.45
+          y: 0.0
+          z: 0.35
+          yaw: 0.0
+```
+
+Run a tree in the arm namespace so its action leaves resolve to that arm's action server:
+
+```bash
+ros2 run manipulator_actions py_trees_runner demo_pick_tree --ros-args -r __ns:=/arm_1
+```
+
+Existing sequence YAML files can also be run as simple sequence trees:
+
+```bash
+ros2 run manipulator_actions py_trees_runner demo_pick --ros-args -r __ns:=/arm_1
+```
+
+To inspect the current BehaviorTree.CPP-compatible XML skeleton:
+
+```bash
+ros2 run manipulator_actions py_trees_runner demo_pick_tree --export-btcpp-xml
+```
+
+The multi-arm launch can also start a tree runner automatically in each arm namespace when `behavior_tree_name` is set:
+
+```bash
+ros2 launch custom_servo_demo multi_servo_example.launch.py behavior_tree_name:=demo_pick_tree
+BEHAVIOR_TREE_NAME=demo_pick_tree /home/rosuser/start_simulation.sh --restart
+```
 
 ### Joystick / `sensor_msgs/msg/Joy` Control
 
@@ -262,6 +313,8 @@ The launch accepts:
 -   `use_pose_stamped_control`: launch one PoseStamped bridge per arm, default `true`
 -   `launch_action_servers`: launch one action server per arm, default `true`
 -   `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
+-   `behavior_tree_name`: optional behavior tree to run once per arm namespace, default empty
+-   `behavior_tree_timeout`: optional behavior tree timeout in seconds, default `60.0`
 -   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
 -   `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
 
@@ -274,6 +327,8 @@ The startup helper maps these launch arguments from options and environment vari
 -   `USE_POSE_STAMPED_CONTROL`: defaults to `true`
 -   `LAUNCH_ACTION_SERVERS`: defaults to `true`
 -   `PREPARE_SERVO`: defaults to `true`
+-   `BEHAVIOR_TREE_NAME`: defaults to empty
+-   `BEHAVIOR_TREE_TIMEOUT`: defaults to `60.0`
 
 This is one RViz/ROS-control simulation scene with prefixed robot models and a shared global TF tree. The Gazebo process is still the existing wrist-camera/world helper, not three separate Gazebo robot simulations.
 

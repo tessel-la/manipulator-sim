@@ -68,6 +68,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-moveit-task-constructor-core \
     ros-${ROS_DISTRO}-moveit-visual-tools \
     ros-${ROS_DISTRO}-pluginlib \
+    ros-${ROS_DISTRO}-py-trees \
     ros-${ROS_DISTRO}-realtime-tools \
     ros-${ROS_DISTRO}-robot-state-publisher \
     ros-${ROS_DISTRO}-ros-gz-bridge \
