@@ -32,6 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     tmux \
     vim \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
     ros-${ROS_DISTRO}-control-msgs \
     ros-${ROS_DISTRO}-control-toolbox \
     ros-${ROS_DISTRO}-controller-manager \

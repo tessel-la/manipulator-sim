@@ -11,18 +11,20 @@ services:
     stdin_open: true   # Keeps STDIN open, allowing for interactive shells
     privileged: true   # Needed for some hardware access, use with caution
     environment:
-      - DISPLAY=$DISPLAY
+      - DISPLAY=${DISPLAY}
       - XAUTHORITY=/home/rosuser/.Xauthority
-      - ROS_DOMAIN_ID=0
-      - ROS_LOCALHOST_ONLY=0
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - FASTDDS_BUILTIN_TRANSPORTS=${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
+      - CYCLONEDDS_URI=${CYCLONEDDS_URI:-file:///etc/cyclonedds/config.xml}
       - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-1}
       - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions behaviour_bridge}
     volumes:
       - ~/.Xauthority:/home/rosuser/.Xauthority:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/shm:/dev/shm
+      - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
       - ./docker/scripts/start_simulation.sh:/home/rosuser/start_simulation.sh:ro
       - ./cors_mesh_server.py:/home/rosuser/cors_mesh_server.py:ro

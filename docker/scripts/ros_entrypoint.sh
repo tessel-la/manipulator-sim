@@ -1,7 +1,27 @@
 #!/bin/bash
 set -e
 
+RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}"
+
+export RMW_IMPLEMENTATION
+export ROS_LOCALHOST_ONLY
+
+if [ "${RMW_IMPLEMENTATION}" = "rmw_fastrtps_cpp" ]; then
+  export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
+fi
+
+if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ] && [ -z "${CYCLONEDDS_URI:-}" ] && [ -f /etc/cyclonedds/config.xml ]; then
+  export CYCLONEDDS_URI="file:///etc/cyclonedds/config.xml"
+fi
+
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
+
+echo "DDS middleware: ${RMW_IMPLEMENTATION}"
+echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}; ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
+if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ]; then
+  echo "CYCLONEDDS_URI: ${CYCLONEDDS_URI:-<unset>}"
+fi
 
 WORKSPACE="${MOVEIT_WS:-/home/${USERNAME}/moveit_ws}"
 DEFAULT_PACKAGES="custom_servo_demo manipulator_action_interfaces manipulator_actions"
