@@ -1,0 +1,29 @@
+name: camera_pick_place_demo
+backend: py_trees
+root:
+  sequence:
+    name: camera_pick_place_demo
+    memory: true
+    children:
+      - image_capture:
+          name: wrist_camera_ready
+          topic: wrist_camera/image_raw
+          timeout: 10.0
+      - detect_object:
+          name: detect_red_cube
+          query: red_cube
+          kind: cube
+          timeout: 5.0
+      - grasp_object:
+          name: grasp_red_cube
+          object_id: red_cube
+          timeout: 18.0
+      - detect_object:
+          name: detect_blue_place_pad
+          query: blue_place_pad
+          kind: place_target
+          timeout: 5.0
+      - place_object:
+          name: place_on_blue_pad
+          target_id: blue_place_pad
+          timeout: 18.0

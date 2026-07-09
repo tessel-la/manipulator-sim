@@ -1,0 +1,42 @@
+frame_id: world
+
+table:
+  name: pick_place_table
+  frame_id: pick_place_table
+  pose: [0.50, 0.00, 0.02, 0.0, 0.0, 0.0]
+  size: [0.90, 0.70, 0.04]
+  color: [0.42, 0.45, 0.43, 1.0]
+
+cubes:
+  - name: red_cube
+    frame_id: pick_cube_red
+    pose: [0.45, -0.12, 0.07, 0.0, 0.0, 0.0]
+    size: 0.06
+    color: [0.95, 0.08, 0.06, 1.0]
+  - name: green_cube
+    frame_id: pick_cube_green
+    pose: [0.55, 0.02, 0.07, 0.0, 0.0, 0.0]
+    size: 0.06
+    color: [0.10, 0.75, 0.25, 1.0]
+  - name: yellow_cube
+    frame_id: pick_cube_yellow
+    pose: [0.36, 0.10, 0.07, 0.0, 0.0, 0.0]
+    size: 0.06
+    color: [0.95, 0.78, 0.08, 1.0]
+
+place_targets:
+  - name: blue_place_pad
+    frame_id: place_target_blue
+    pose: [0.45, 0.22, 0.046, 0.0, 0.0, 0.0]
+    radius: 0.09
+    height: 0.012
+    color: [0.08, 0.38, 0.95, 1.0]
+
+charuco_boards:
+  - name: charuco_board
+    frame_id: charuco_board
+    pose: [0.27, -0.25, 0.045, 0.0, 0.0, 0.0]
+    squares_x: 5
+    squares_y: 7
+    square_size: 0.035
+    thickness: 0.006

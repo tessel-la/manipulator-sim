@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import PoseStamped
 import rclpy
 from rclpy.action import ActionServer, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
+from tf2_ros import TransformException
 
-from manipulator_action_interfaces.action import MoveEndEffector, RunSequence
+from manipulator_action_interfaces.action import (
+    DetectObject,
+    GraspObject,
+    MoveEndEffector,
+    PlaceObject,
+    RunSequence,
+)
 from manipulator_actions.controller import ServoMotionController
 from manipulator_actions.motion_math import PoseTarget, direction_offsets
 from manipulator_actions.sequences import (
@@ -45,6 +56,13 @@ class ManipulatorActionServer(Node):
         self.declare_parameter("timeout", 10.0)
         self.declare_parameter("tf_timeout", 5.0)
         self.declare_parameter("sequence_directories", "")
+        self.declare_parameter("scene_topic", "/pick_place_scene/objects")
+        self.declare_parameter("grasp_hover_height", 0.25)
+        self.declare_parameter("grasp_approach_height", 0.13)
+        self.declare_parameter("place_hover_height", 0.25)
+        self.declare_parameter("place_release_height", 0.13)
+        self.declare_parameter("lift_height", 0.25)
+        self.declare_parameter("gripper_pause", 0.5)
 
         self._controller = ServoMotionController(
             node=self,
@@ -56,6 +74,16 @@ class ManipulatorActionServer(Node):
                 "switch_command_type_service"
             ).value,
             tf_timeout_sec=float(self.get_parameter("tf_timeout").value),
+        )
+        self._scene_objects: List[Dict] = []
+        self._held_object: Optional[Dict] = None
+        scene_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self._scene_sub = self.create_subscription(
+            String,
+            str(self.get_parameter("scene_topic").value),
+            self._on_scene,
+            scene_qos,
+            callback_group=self._callback_group,
         )
 
         self._move_server = ActionServer(
@@ -71,6 +99,30 @@ class ManipulatorActionServer(Node):
             RunSequence,
             "run_sequence",
             self._execute_sequence,
+            cancel_callback=self._cancel_callback,
+            callback_group=self._callback_group,
+        )
+        self._detect_server = ActionServer(
+            self,
+            DetectObject,
+            "detect_object",
+            self._execute_detect,
+            cancel_callback=self._cancel_callback,
+            callback_group=self._callback_group,
+        )
+        self._grasp_server = ActionServer(
+            self,
+            GraspObject,
+            "grasp_object",
+            self._execute_grasp,
+            cancel_callback=self._cancel_callback,
+            callback_group=self._callback_group,
+        )
+        self._place_server = ActionServer(
+            self,
+            PlaceObject,
+            "place_object",
+            self._execute_place,
             cancel_callback=self._cancel_callback,
             callback_group=self._callback_group,
         )
@@ -200,6 +252,176 @@ class ManipulatorActionServer(Node):
         goal_handle.succeed()
         return result
 
+    def _execute_detect(self, goal_handle):
+        goal = goal_handle.request
+        result = DetectObject.Result()
+        timeout = goal.timeout if goal.timeout > 0.0 else self._default_timeout
+        target_frame = self._target_frame(goal.target_frame)
+        deadline = time.monotonic() + timeout
+
+        while rclpy.ok() and time.monotonic() < deadline:
+            if goal_handle.is_cancel_requested:
+                result.success = False
+                result.message = "Detection canceled"
+                goal_handle.canceled()
+                return result
+
+            feedback = DetectObject.Feedback()
+            feedback.state = "resolving scene object"
+            goal_handle.publish_feedback(feedback)
+
+            scene_object = self._resolve_scene_object(goal.query, goal.kind)
+            if scene_object is None and goal.query:
+                scene_object = {
+                    "name": goal.query,
+                    "frame_id": goal.query,
+                    "kind": goal.kind or "unknown",
+                }
+
+            if scene_object is not None:
+                pose, message = self._pose_for_object(scene_object, target_frame)
+                if pose is not None:
+                    result.success = True
+                    result.message = message
+                    result.name = str(scene_object.get("name") or scene_object.get("frame_id") or "")
+                    result.kind = str(scene_object.get("kind") or "")
+                    result.object_frame = str(scene_object.get("frame_id") or result.name)
+                    result.pose = pose
+                    result.confidence = 1.0
+                    goal_handle.succeed()
+                    return result
+
+            time.sleep(0.05)
+
+        result.success = False
+        result.message = (
+            f"Object '{goal.query or goal.kind}' was not detected before timeout"
+        )
+        result.confidence = 0.0
+        goal_handle.abort()
+        return result
+
+    def _execute_grasp(self, goal_handle):
+        goal = goal_handle.request
+        result = GraspObject.Result()
+        timeout = goal.timeout if goal.timeout > 0.0 else self._default_timeout
+        hover_height = self._positive_or_default(goal.hover_height, "grasp_hover_height")
+        approach_height = self._positive_or_default(
+            goal.approach_height, "grasp_approach_height"
+        )
+        lift_height = self._positive_or_default(goal.lift_height, "lift_height")
+
+        scene_object = self._resolve_scene_object(goal.object_id, "cube")
+        if scene_object is None:
+            scene_object = self._resolve_scene_object(goal.object_id, "")
+        if scene_object is None:
+            result.success = False
+            result.message = f"Cannot grasp unknown object '{goal.object_id}'"
+            goal_handle.abort()
+            return result
+
+        pose, message = self._pose_for_object(scene_object, self._controller.base_frame)
+        if pose is None:
+            result.success = False
+            result.message = message
+            goal_handle.abort()
+            return result
+
+        target = self._pose_target_from_pose(pose)
+        result.grasp_pose = pose
+        result.object_id = str(scene_object.get("name") or goal.object_id)
+        result.object_frame = str(scene_object.get("frame_id") or result.object_id)
+
+        steps = [
+            ("moving to pregrasp", PoseTarget(target.x, target.y, target.z + hover_height, target.yaw)),
+            ("approaching object", PoseTarget(target.x, target.y, target.z + approach_height, target.yaw)),
+            ("lifting object", PoseTarget(target.x, target.y, target.z + lift_height, target.yaw)),
+        ]
+        success, status = self._run_pose_steps(
+            goal_handle,
+            GraspObject.Feedback,
+            steps,
+            timeout,
+            close_pause=True,
+        )
+        if not success:
+            result.success = False
+            result.message = status
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+            else:
+                goal_handle.abort()
+            return result
+
+        self._held_object = scene_object
+        result.success = True
+        result.message = f"Simulated grasp completed for '{result.object_id}'"
+        goal_handle.succeed()
+        return result
+
+    def _execute_place(self, goal_handle):
+        goal = goal_handle.request
+        result = PlaceObject.Result()
+        timeout = goal.timeout if goal.timeout > 0.0 else self._default_timeout
+        hover_height = self._positive_or_default(goal.hover_height, "place_hover_height")
+        release_height = self._positive_or_default(
+            goal.release_height, "place_release_height"
+        )
+        lift_height = self._positive_or_default(goal.lift_height, "lift_height")
+
+        target_object = self._resolve_scene_object(goal.target_id, "place_target")
+        if target_object is None:
+            target_object = self._resolve_scene_object(goal.target_id, "")
+        if target_object is None:
+            result.success = False
+            result.message = f"Cannot place on unknown target '{goal.target_id}'"
+            goal_handle.abort()
+            return result
+
+        held_name = goal.object_id or (
+            str(self._held_object.get("name") or self._held_object.get("frame_id"))
+            if self._held_object
+            else ""
+        )
+        pose, message = self._pose_for_object(target_object, self._controller.base_frame)
+        if pose is None:
+            result.success = False
+            result.message = message
+            goal_handle.abort()
+            return result
+
+        target = self._pose_target_from_pose(pose)
+        result.place_pose = pose
+        result.object_id = held_name
+        result.target_id = str(target_object.get("name") or goal.target_id)
+
+        steps = [
+            ("moving over place target", PoseTarget(target.x, target.y, target.z + hover_height, target.yaw)),
+            ("lowering to release", PoseTarget(target.x, target.y, target.z + release_height, target.yaw)),
+            ("retreating after release", PoseTarget(target.x, target.y, target.z + lift_height, target.yaw)),
+        ]
+        success, status = self._run_pose_steps(
+            goal_handle,
+            PlaceObject.Feedback,
+            steps,
+            timeout,
+            close_pause=False,
+        )
+        if not success:
+            result.success = False
+            result.message = status
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+            else:
+                goal_handle.abort()
+            return result
+
+        self._held_object = None
+        result.success = True
+        result.message = f"Simulated place completed on '{result.target_id}'"
+        goal_handle.succeed()
+        return result
+
     def _run_step(self, step: SequenceStep, cancel_requested) -> tuple[bool, str]:
         if step.kind == WAIT:
             deadline = time.monotonic() + step.params["seconds"]
@@ -244,6 +466,128 @@ class ManipulatorActionServer(Node):
             return success, message
 
         return False, f"Unsupported step kind '{step.kind}'"
+
+    def _run_pose_steps(
+        self,
+        goal_handle,
+        feedback_type,
+        steps: List[tuple[str, PoseTarget]],
+        timeout: float,
+        close_pause: bool,
+    ) -> tuple[bool, str]:
+        per_motion_timeout = max(timeout / max(len(steps), 1), 1.0)
+        for index, (state, target) in enumerate(steps):
+            if goal_handle.is_cancel_requested:
+                self._controller.halt()
+                return False, "Action canceled"
+
+            feedback = feedback_type()
+            feedback.state = state
+            goal_handle.publish_feedback(feedback)
+
+            if close_pause and index == 2:
+                pause_feedback = feedback_type()
+                pause_feedback.state = "closing simulated gripper"
+                goal_handle.publish_feedback(pause_feedback)
+                self._sleep_with_cancel(
+                    float(self.get_parameter("gripper_pause").value),
+                    goal_handle,
+                )
+                if goal_handle.is_cancel_requested:
+                    return False, "Action canceled"
+            elif not close_pause and index == 2:
+                pause_feedback = feedback_type()
+                pause_feedback.state = "opening simulated gripper"
+                goal_handle.publish_feedback(pause_feedback)
+                self._sleep_with_cancel(
+                    float(self.get_parameter("gripper_pause").value),
+                    goal_handle,
+                )
+                if goal_handle.is_cancel_requested:
+                    return False, "Action canceled"
+
+            success, message, _ = self._controller.move_absolute(
+                target=target,
+                position_tolerance=self._default_position_tolerance,
+                yaw_tolerance=self._default_yaw_tolerance,
+                timeout_sec=per_motion_timeout,
+                cancel_requested=lambda: goal_handle.is_cancel_requested,
+            )
+            if not success:
+                return False, f"{state} failed: {message}"
+
+        return True, "completed"
+
+    def _sleep_with_cancel(self, seconds: float, goal_handle) -> None:
+        deadline = time.monotonic() + max(seconds, 0.0)
+        while time.monotonic() < deadline and not goal_handle.is_cancel_requested:
+            time.sleep(0.05)
+
+    def _on_scene(self, message: String) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError as exc:
+            self.get_logger().warning(f"Ignoring malformed scene payload: {exc}")
+            return
+
+        objects: List[Dict] = []
+        for key, kind in (
+            ("cubes", "cube"),
+            ("place_targets", "place_target"),
+            ("charuco_boards", "charuco_board"),
+        ):
+            for item in payload.get(key, []) or []:
+                if isinstance(item, dict):
+                    scene_object = dict(item)
+                    scene_object["kind"] = kind
+                    objects.append(scene_object)
+        self._scene_objects = objects
+
+    def _resolve_scene_object(self, query: str, kind: str) -> Optional[Dict]:
+        query = str(query or "").strip()
+        kind = str(kind or "").strip()
+        for scene_object in self._scene_objects:
+            if kind and scene_object.get("kind") != kind:
+                continue
+            if not query:
+                return scene_object
+            names = {
+                str(scene_object.get("name", "")),
+                str(scene_object.get("frame_id", "")),
+            }
+            if query in names:
+                return scene_object
+        return None
+
+    def _pose_for_object(
+        self, scene_object: Dict, target_frame: str
+    ) -> tuple[Optional[PoseStamped], str]:
+        object_frame = str(scene_object.get("frame_id") or scene_object.get("name") or "")
+        if not object_frame:
+            return None, "Detected object has no frame_id"
+        try:
+            transform = self._controller.lookup_transform(target_frame, object_frame)
+        except TransformException as exc:
+            return None, f"Could not transform '{object_frame}' to '{target_frame}': {exc}"
+
+        pose = PoseStamped()
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.header.frame_id = target_frame
+        pose.pose.position.x = transform.transform.translation.x
+        pose.pose.position.y = transform.transform.translation.y
+        pose.pose.position.z = transform.transform.translation.z
+        pose.pose.orientation = transform.transform.rotation
+        return pose, f"Detected '{scene_object.get('name', object_frame)}'"
+
+    def _pose_target_from_pose(self, pose: PoseStamped) -> PoseTarget:
+        return self._controller.target_from_pose_stamped(pose)
+
+    def _target_frame(self, requested: str) -> str:
+        frame = str(requested or "").strip().lstrip("/")
+        return frame or self._controller.base_frame
+
+    def _positive_or_default(self, value: float, parameter_name: str) -> float:
+        return float(value) if value > 0.0 else float(self.get_parameter(parameter_name).value)
 
     def _sequence_paths(self) -> List[Path]:
         package_share = get_package_share_directory("manipulator_actions")

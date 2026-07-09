@@ -2,7 +2,10 @@ import pytest
 
 from manipulator_actions.behavior_tree_specs import (
     BACKEND_BEHAVIOR_TREE_CPP,
+    DETECT_OBJECT,
+    GRASP_OBJECT,
     MOVE_RELATIVE,
+    PLACE_OBJECT,
     SEQUENCE,
     WAIT,
     BehaviorTreeValidationError,
@@ -74,3 +77,40 @@ def test_bt_cpp_xml_export_preserves_future_backend_shape():
     assert 'BehaviorTree ID="future_tree"' in xml
     assert "MoveRelative" in xml
     assert 'up="0.05"' in xml
+
+
+def test_normalize_tree_accepts_modular_pick_place_actions():
+    spec = normalize_tree(
+        {
+            "name": "modular_pick_place",
+            "root": {
+                "sequence": {
+                    "children": [
+                        {
+                            "detect_object": {
+                                "name": "detect_red",
+                                "query": "red_cube",
+                                "kind": "cube",
+                            }
+                        },
+                        {
+                            "grasp_object": {
+                                "name": "grasp_red",
+                                "object_id": "red_cube",
+                            }
+                        },
+                        {
+                            "place_object": {
+                                "name": "place_red",
+                                "target_id": "blue_place_pad",
+                            }
+                        },
+                    ]
+                }
+            },
+        }
+    )
+
+    assert spec.root.children[0].kind == DETECT_OBJECT
+    assert spec.root.children[1].kind == GRASP_OBJECT
+    assert spec.root.children[2].kind == PLACE_OBJECT

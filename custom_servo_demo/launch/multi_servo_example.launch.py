@@ -203,6 +203,15 @@ def _arm_actions(context):
     behavior_tree_timeout = LaunchConfiguration("behavior_tree_timeout")
     use_rviz = LaunchConfiguration("use_rviz")
     use_gazebo_camera = LaunchConfiguration("use_gazebo_camera")
+    scene_config = LaunchConfiguration("scene_config")
+    launch_scene_camera = LaunchConfiguration("launch_scene_camera")
+    wrist_camera_offset_roll = LaunchConfiguration("wrist_camera_offset_roll")
+    wrist_camera_offset_pitch = LaunchConfiguration("wrist_camera_offset_pitch")
+    wrist_camera_offset_yaw = LaunchConfiguration("wrist_camera_offset_yaw")
+    wrist_camera_look_at_frame = LaunchConfiguration("wrist_camera_look_at_frame")
+    wrist_camera_look_at_x = LaunchConfiguration("wrist_camera_look_at_x")
+    wrist_camera_look_at_y = LaunchConfiguration("wrist_camera_look_at_y")
+    wrist_camera_look_at_z = LaunchConfiguration("wrist_camera_look_at_z")
     launch_behavior_tree = behavior_tree_name.lower() not in (
         "",
         "0",
@@ -284,6 +293,15 @@ def _arm_actions(context):
             "arm_prefix": arm_prefix,
             "enabled": use_gazebo_camera,
             "use_prefixed_frames": "true",
+            "scene_config": scene_config,
+            "launch_scene_camera": launch_scene_camera,
+            "wrist_camera_offset_roll": wrist_camera_offset_roll,
+            "wrist_camera_offset_pitch": wrist_camera_offset_pitch,
+            "wrist_camera_offset_yaw": wrist_camera_offset_yaw,
+            "wrist_camera_look_at_frame": wrist_camera_look_at_frame,
+            "wrist_camera_look_at_x": wrist_camera_look_at_x,
+            "wrist_camera_look_at_y": wrist_camera_look_at_y,
+            "wrist_camera_look_at_z": wrist_camera_look_at_z,
         }.items(),
     )
     actions.append(camera_launch)
@@ -534,6 +552,51 @@ def generate_launch_description():
                 "use_gazebo_camera",
                 default_value="true",
                 description="Launch the single Gazebo camera/world process",
+            ),
+            DeclareLaunchArgument(
+                "scene_config",
+                default_value="",
+                description="Optional YAML scene config for camera-visible pick-place fixtures",
+            ),
+            DeclareLaunchArgument(
+                "launch_scene_camera",
+                default_value="true",
+                description="Launch the fixed overhead scene camera in the Gazebo world",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_offset_roll",
+                default_value="0.0",
+                description="Wrist camera mount roll offset relative to the hand frame",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_offset_pitch",
+                default_value="-1.5708",
+                description="Wrist camera mount pitch offset relative to the hand frame",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_offset_yaw",
+                default_value="0.0",
+                description="Wrist camera mount yaw offset relative to the hand frame",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_look_at_frame",
+                default_value="pick_place_table",
+                description="Optional scene frame for the simulated wrist camera to look at",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_look_at_x",
+                default_value="0.45",
+                description="Fallback world X target for the simulated wrist camera",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_look_at_y",
+                default_value="0.0",
+                description="Fallback world Y target for the simulated wrist camera",
+            ),
+            DeclareLaunchArgument(
+                "wrist_camera_look_at_z",
+                default_value="0.04",
+                description="Fallback world Z target for the simulated wrist camera",
             ),
             OpaqueFunction(function=_arm_actions),
         ]

@@ -14,14 +14,18 @@ Start or attach to the manipulator simulation tmux session.
 Options:
   --arm-count COUNT        Number of arms to launch (default: ${ARM_COUNT:-1})
   --arm-prefix PREFIX      Namespace prefix for arms (default: ${ARM_PREFIX:-arm})
+  --scene-config PATH      Pick-place scene YAML for Gazebo cameras
   --no-gazebo-camera       Disable Gazebo wrist cameras
+  --no-scene-camera        Disable the fixed overhead scene camera
   --restart                Restart the tmux session before launching
   -h, --help               Show this help
 
 Environment variables are still supported:
   ARM_COUNT, ARM_PREFIX, USE_JOY_TELEOP, USE_POSE_STAMPED_CONTROL,
   LAUNCH_ACTION_SERVERS, PREPARE_SERVO, USE_GAZEBO_CAMERA,
-  BEHAVIOR_TREE_NAME, BEHAVIOR_TREE_TIMEOUT
+  LAUNCH_SCENE_CAMERA, PICK_PLACE_SCENE_CONFIG, BEHAVIOR_TREE_NAME,
+  BEHAVIOR_TREE_TIMEOUT, WRIST_CAMERA_OFFSET_ROLL, WRIST_CAMERA_OFFSET_PITCH,
+  WRIST_CAMERA_OFFSET_YAW, WRIST_CAMERA_LOOK_AT_FRAME
 EOF
 }
 
@@ -58,8 +62,22 @@ while [[ $# -gt 0 ]]; do
       require_value "--arm-prefix" "${ARM_PREFIX}"
       shift
       ;;
+    --scene-config)
+      require_value "$1" "${2:-}"
+      PICK_PLACE_SCENE_CONFIG="$2"
+      shift 2
+      ;;
+    --scene-config=*)
+      PICK_PLACE_SCENE_CONFIG="${1#*=}"
+      require_value "--scene-config" "${PICK_PLACE_SCENE_CONFIG}"
+      shift
+      ;;
     --no-gazebo-camera)
       USE_GAZEBO_CAMERA=false
+      shift
+      ;;
+    --no-scene-camera)
+      LAUNCH_SCENE_CAMERA=false
       shift
       ;;
     --restart)
@@ -90,6 +108,12 @@ export USE_POSE_STAMPED_CONTROL="${USE_POSE_STAMPED_CONTROL:-true}"
 export LAUNCH_ACTION_SERVERS="${LAUNCH_ACTION_SERVERS:-true}"
 export PREPARE_SERVO="${PREPARE_SERVO:-true}"
 export USE_GAZEBO_CAMERA="${USE_GAZEBO_CAMERA:-true}"
+export LAUNCH_SCENE_CAMERA="${LAUNCH_SCENE_CAMERA:-true}"
+export PICK_PLACE_SCENE_CONFIG="${PICK_PLACE_SCENE_CONFIG:-${WORKSPACE}/src/custom_servo_demo/config/pick_place_scene.yaml}"
+export WRIST_CAMERA_OFFSET_ROLL="${WRIST_CAMERA_OFFSET_ROLL:-0.0}"
+export WRIST_CAMERA_OFFSET_PITCH="${WRIST_CAMERA_OFFSET_PITCH:--1.5708}"
+export WRIST_CAMERA_OFFSET_YAW="${WRIST_CAMERA_OFFSET_YAW:-0.0}"
+export WRIST_CAMERA_LOOK_AT_FRAME="${WRIST_CAMERA_LOOK_AT_FRAME:-pick_place_table}"
 export BEHAVIOR_TREE_NAME="${BEHAVIOR_TREE_NAME:-none}"
 export BEHAVIOR_TREE_TIMEOUT="${BEHAVIOR_TREE_TIMEOUT:-60.0}"
 

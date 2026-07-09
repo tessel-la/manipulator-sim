@@ -23,8 +23,20 @@ SELECTOR = "selector"
 PARALLEL = "parallel"
 RUN_SEQUENCE = "run_sequence"
 IMAGE_CAPTURE = "image_capture"
+DETECT_OBJECT = "detect_object"
+GRASP_OBJECT = "grasp_object"
+PLACE_OBJECT = "place_object"
 COMPOSITE_TYPES = {SEQUENCE, SELECTOR, PARALLEL}
-LEAF_TYPES = {MOVE_ABSOLUTE, MOVE_RELATIVE, WAIT, RUN_SEQUENCE, IMAGE_CAPTURE}
+LEAF_TYPES = {
+    MOVE_ABSOLUTE,
+    MOVE_RELATIVE,
+    WAIT,
+    RUN_SEQUENCE,
+    IMAGE_CAPTURE,
+    DETECT_OBJECT,
+    GRASP_OBJECT,
+    PLACE_OBJECT,
+}
 VALID_NODE_TYPES = COMPOSITE_TYPES | LEAF_TYPES
 BACKEND_PY_TREES = "py_trees"
 BACKEND_BEHAVIOR_TREE_CPP = "behavior_tree_cpp"
@@ -74,6 +86,13 @@ def _optional_number(
     if not isinstance(value, (int, float)):
         raise BehaviorTreeValidationError(f"Field '{name}' must be a number")
     return float(value)
+
+
+def _optional_string(params: Mapping[str, Any], name: str, default: str = "") -> str:
+    value = params.get(name, default)
+    if not isinstance(value, str):
+        raise BehaviorTreeValidationError(f"Field '{name}' must be a string")
+    return value
 
 
 def _node_name(kind: str, params: Mapping[str, Any], fallback: str) -> str:
@@ -141,6 +160,47 @@ def _normalize_leaf(kind: str, params: Mapping[str, Any]) -> Dict[str, Any]:
         if timeout < 0.0:
             raise BehaviorTreeValidationError("image_capture timeout must be non-negative")
         return {"topic": topic, "timeout": timeout}
+
+    if kind == DETECT_OBJECT:
+        query = _optional_string(params, "query")
+        object_kind = _optional_string(params, "kind")
+        target_frame = _optional_string(params, "target_frame")
+        timeout = _optional_number(params, "timeout", 5.0)
+        if not query and not object_kind:
+            raise BehaviorTreeValidationError("detect_object needs query or kind")
+        if timeout < 0.0:
+            raise BehaviorTreeValidationError("detect_object timeout must be non-negative")
+        return {
+            "query": query,
+            "kind": object_kind,
+            "target_frame": target_frame,
+            "timeout": timeout,
+        }
+
+    if kind == GRASP_OBJECT:
+        object_id = _optional_string(params, "object_id")
+        if not object_id:
+            raise BehaviorTreeValidationError("grasp_object needs object_id")
+        return {
+            "object_id": object_id,
+            "hover_height": _optional_number(params, "hover_height"),
+            "approach_height": _optional_number(params, "approach_height"),
+            "lift_height": _optional_number(params, "lift_height"),
+            "timeout": _optional_number(params, "timeout"),
+        }
+
+    if kind == PLACE_OBJECT:
+        target_id = _optional_string(params, "target_id")
+        if not target_id:
+            raise BehaviorTreeValidationError("place_object needs target_id")
+        return {
+            "target_id": target_id,
+            "object_id": _optional_string(params, "object_id"),
+            "hover_height": _optional_number(params, "hover_height"),
+            "release_height": _optional_number(params, "release_height"),
+            "lift_height": _optional_number(params, "lift_height"),
+            "timeout": _optional_number(params, "timeout"),
+        }
 
     name = params.get("name")
     if not isinstance(name, str) or not name:
@@ -283,6 +343,9 @@ def _node_to_bt_cpp(spec: BehaviorNodeSpec) -> ET.Element:
         WAIT: "Wait",
         RUN_SEQUENCE: "RunSequence",
         IMAGE_CAPTURE: "ImageCapture",
+        DETECT_OBJECT: "DetectObject",
+        GRASP_OBJECT: "GraspObject",
+        PLACE_OBJECT: "PlaceObject",
     }
     element = ET.Element(tag_by_kind[spec.kind], {"name": spec.name})
     for key, value in spec.params.items():

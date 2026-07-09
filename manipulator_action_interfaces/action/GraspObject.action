@@ -1,0 +1,16 @@
+# Object name or frame id to detect and grasp.
+string object_id
+
+# Optional motion parameters. Values <= 0 use server defaults.
+float64 hover_height
+float64 approach_height
+float64 lift_height
+float64 timeout
+---
+bool success
+string message
+string object_id
+string object_frame
+geometry_msgs/PoseStamped grasp_pose
+---
+string state

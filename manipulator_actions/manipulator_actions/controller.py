@@ -126,6 +126,10 @@ class ServoMotionController:
             yaw=yaw_from_quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
         )
 
+    def lookup_transform(self, target_frame: str, source_frame: str):
+        """Return the latest TF transform from target_frame to source_frame."""
+        return self._lookup_transform(target_frame, source_frame)
+
     def target_from_pose_stamped(self, message: PoseStamped) -> PoseTarget:
         """Convert a PoseStamped target into the controller base frame."""
         frame_id = message.header.frame_id.strip().lstrip("/")

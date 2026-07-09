@@ -1,0 +1,21 @@
+# Object lookup query. The simulated detector accepts object name or frame id.
+string query
+
+# Optional filters. Examples: cube, place_target, charuco_board.
+string kind
+
+# Pose result frame. Empty uses the action server base frame.
+string target_frame
+
+# Optional timeout. Values <= 0 use the server default.
+float64 timeout
+---
+bool success
+string message
+string name
+string kind
+string object_frame
+geometry_msgs/PoseStamped pose
+float64 confidence
+---
+string state

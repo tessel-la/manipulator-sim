@@ -17,14 +17,23 @@ from rclpy.utilities import remove_ros_args
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-from manipulator_action_interfaces.action import MoveEndEffector, RunSequence
+from manipulator_action_interfaces.action import (
+    DetectObject,
+    GraspObject,
+    MoveEndEffector,
+    PlaceObject,
+    RunSequence,
+)
 from manipulator_actions.behavior_tree_specs import (
     BACKEND_BEHAVIOR_TREE_CPP,
     BACKEND_PY_TREES,
+    DETECT_OBJECT,
+    GRASP_OBJECT,
     IMAGE_CAPTURE,
     MOVE_ABSOLUTE,
     MOVE_RELATIVE,
     PARALLEL,
+    PLACE_OBJECT,
     RUN_SEQUENCE,
     SELECTOR,
     SEQUENCE,
@@ -187,6 +196,176 @@ class RunSequenceAction(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.RUNNING
 
 
+class DetectObjectAction(py_trees.behaviour.Behaviour):
+    def __init__(self, node: Node, spec: BehaviorNodeSpec) -> None:
+        super().__init__(name=spec.name)
+        self._spec = spec
+        self._client = ActionClient(node, DetectObject, "detect_object")
+        self._server_deadline: Optional[float] = None
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "idle"
+
+    def initialise(self) -> None:
+        self._server_deadline = time.monotonic() + 10.0
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "waiting for detect_object"
+
+    def update(self):
+        if self._result_future is not None:
+            if not self._result_future.done():
+                return py_trees.common.Status.RUNNING
+            result = self._result_future.result().result
+            self.feedback_message = result.message
+            return (
+                py_trees.common.Status.SUCCESS
+                if result.success
+                else py_trees.common.Status.FAILURE
+            )
+
+        if self._send_future is not None:
+            if not self._send_future.done():
+                return py_trees.common.Status.RUNNING
+            goal_handle = self._send_future.result()
+            if not goal_handle.accepted:
+                self.feedback_message = "detect goal rejected"
+                return py_trees.common.Status.FAILURE
+            self.feedback_message = "detecting"
+            self._result_future = goal_handle.get_result_async()
+            return py_trees.common.Status.RUNNING
+
+        if self._client.wait_for_server(timeout_sec=0.0):
+            goal = DetectObject.Goal()
+            goal.query = str(self._spec.params.get("query", ""))
+            goal.kind = str(self._spec.params.get("kind", ""))
+            goal.target_frame = str(self._spec.params.get("target_frame", ""))
+            goal.timeout = float(self._spec.params.get("timeout", 0.0))
+            self._send_future = self._client.send_goal_async(goal)
+            self.feedback_message = "detect goal sent"
+            return py_trees.common.Status.RUNNING
+
+        if self._server_deadline is not None and time.monotonic() > self._server_deadline:
+            self.feedback_message = "detect_object action server is not available"
+            return py_trees.common.Status.FAILURE
+        return py_trees.common.Status.RUNNING
+
+
+class GraspObjectAction(py_trees.behaviour.Behaviour):
+    def __init__(self, node: Node, spec: BehaviorNodeSpec) -> None:
+        super().__init__(name=spec.name)
+        self._spec = spec
+        self._client = ActionClient(node, GraspObject, "grasp_object")
+        self._server_deadline: Optional[float] = None
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "idle"
+
+    def initialise(self) -> None:
+        self._server_deadline = time.monotonic() + 10.0
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "waiting for grasp_object"
+
+    def update(self):
+        if self._result_future is not None:
+            if not self._result_future.done():
+                return py_trees.common.Status.RUNNING
+            result = self._result_future.result().result
+            self.feedback_message = result.message
+            return (
+                py_trees.common.Status.SUCCESS
+                if result.success
+                else py_trees.common.Status.FAILURE
+            )
+
+        if self._send_future is not None:
+            if not self._send_future.done():
+                return py_trees.common.Status.RUNNING
+            goal_handle = self._send_future.result()
+            if not goal_handle.accepted:
+                self.feedback_message = "grasp goal rejected"
+                return py_trees.common.Status.FAILURE
+            self.feedback_message = "grasping"
+            self._result_future = goal_handle.get_result_async()
+            return py_trees.common.Status.RUNNING
+
+        if self._client.wait_for_server(timeout_sec=0.0):
+            params = self._spec.params
+            goal = GraspObject.Goal()
+            goal.object_id = str(params["object_id"])
+            goal.hover_height = float(params.get("hover_height", 0.0))
+            goal.approach_height = float(params.get("approach_height", 0.0))
+            goal.lift_height = float(params.get("lift_height", 0.0))
+            goal.timeout = float(params.get("timeout", 0.0))
+            self._send_future = self._client.send_goal_async(goal)
+            self.feedback_message = "grasp goal sent"
+            return py_trees.common.Status.RUNNING
+
+        if self._server_deadline is not None and time.monotonic() > self._server_deadline:
+            self.feedback_message = "grasp_object action server is not available"
+            return py_trees.common.Status.FAILURE
+        return py_trees.common.Status.RUNNING
+
+
+class PlaceObjectAction(py_trees.behaviour.Behaviour):
+    def __init__(self, node: Node, spec: BehaviorNodeSpec) -> None:
+        super().__init__(name=spec.name)
+        self._spec = spec
+        self._client = ActionClient(node, PlaceObject, "place_object")
+        self._server_deadline: Optional[float] = None
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "idle"
+
+    def initialise(self) -> None:
+        self._server_deadline = time.monotonic() + 10.0
+        self._send_future = None
+        self._result_future = None
+        self.feedback_message = "waiting for place_object"
+
+    def update(self):
+        if self._result_future is not None:
+            if not self._result_future.done():
+                return py_trees.common.Status.RUNNING
+            result = self._result_future.result().result
+            self.feedback_message = result.message
+            return (
+                py_trees.common.Status.SUCCESS
+                if result.success
+                else py_trees.common.Status.FAILURE
+            )
+
+        if self._send_future is not None:
+            if not self._send_future.done():
+                return py_trees.common.Status.RUNNING
+            goal_handle = self._send_future.result()
+            if not goal_handle.accepted:
+                self.feedback_message = "place goal rejected"
+                return py_trees.common.Status.FAILURE
+            self.feedback_message = "placing"
+            self._result_future = goal_handle.get_result_async()
+            return py_trees.common.Status.RUNNING
+
+        if self._client.wait_for_server(timeout_sec=0.0):
+            params = self._spec.params
+            goal = PlaceObject.Goal()
+            goal.target_id = str(params["target_id"])
+            goal.object_id = str(params.get("object_id", ""))
+            goal.hover_height = float(params.get("hover_height", 0.0))
+            goal.release_height = float(params.get("release_height", 0.0))
+            goal.lift_height = float(params.get("lift_height", 0.0))
+            goal.timeout = float(params.get("timeout", 0.0))
+            self._send_future = self._client.send_goal_async(goal)
+            self.feedback_message = "place goal sent"
+            return py_trees.common.Status.RUNNING
+
+        if self._server_deadline is not None and time.monotonic() > self._server_deadline:
+            self.feedback_message = "place_object action server is not available"
+            return py_trees.common.Status.FAILURE
+        return py_trees.common.Status.RUNNING
+
+
 class ImageCapture(py_trees.behaviour.Behaviour):
     def __init__(self, node: Node, spec: BehaviorNodeSpec) -> None:
         super().__init__(name=spec.name)
@@ -245,6 +424,12 @@ def build_py_tree(node: Node, spec: BehaviorNodeSpec):
         return MoveEndEffectorAction(node, spec)
     elif spec.kind == RUN_SEQUENCE:
         return RunSequenceAction(node, spec)
+    elif spec.kind == DETECT_OBJECT:
+        return DetectObjectAction(node, spec)
+    elif spec.kind == GRASP_OBJECT:
+        return GraspObjectAction(node, spec)
+    elif spec.kind == PLACE_OBJECT:
+        return PlaceObjectAction(node, spec)
     elif spec.kind == IMAGE_CAPTURE:
         return ImageCapture(node, spec)
     else:

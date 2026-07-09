@@ -101,9 +101,14 @@ The Gazebo wrist-camera setup supports up to three arms. For higher counts, disa
 /home/rosuser/start_simulation.sh --arm-count 4 --no-gazebo-camera --restart
 ```
 
+The Gazebo pane now builds a camera-visible pick-place scene from
+`custom_servo_demo/config/pick_place_scene.yaml`: colored cubes, a blue place
+pad, a Charuco-style board, one wrist camera per arm, and a fixed overhead
+`/scene_camera/image_raw` stream.
+
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
 1.  **multi_servo_launch**: Runs `ros2 launch custom_servo_demo multi_servo_example.launch.py` with `ARM_COUNT=1` and `ARM_PREFIX=arm` by default, creating `/arm_1`.
-2.  **wrist_cameras**: Runs `ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py` with the same arm count/prefix, exposing one Gazebo wrist camera per arm namespace.
+2.  **wrist_cameras**: Runs `ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py` with the same arm count/prefix, mounting each Gazebo camera to its namespaced hand TF frame and exposing one wrist camera per arm namespace.
 3.  **cors_mesh_server**: Serves installed ROS mesh assets from `/opt/ros/${ROS_DISTRO}/share` on port 8000.
 
 Your terminal will now be attached to this tmux session.
@@ -115,14 +120,32 @@ You can also override other startup defaults through helper options or environme
 ARM_COUNT=2 ARM_PREFIX=robot USE_GAZEBO_CAMERA=false /home/rosuser/start_simulation.sh
 ```
 
+Use another pick-place fixture layout without editing the launch files:
+
+```bash
+/home/rosuser/start_simulation.sh --scene-config /path/to/my_scene.yaml --restart
+```
+
 ### 5. Controlling the Robot with Actions
 
-The action server exposes two ROS2 actions:
+The action server exposes modular ROS2 actions:
 
 -   `/move_end_effector` using `manipulator_action_interfaces/action/MoveEndEffector`
 -   `/run_sequence` using `manipulator_action_interfaces/action/RunSequence`
+-   `/detect_object` using `manipulator_action_interfaces/action/DetectObject`
+-   `/grasp_object` using `manipulator_action_interfaces/action/GraspObject`
+-   `/place_object` using `manipulator_action_interfaces/action/PlaceObject`
 
 For `/move_end_effector`, `relative: false` means an absolute base-frame target and `relative: true` means an offset from the current end-effector pose.
+In the simulated pick-place scene, `/detect_object` resolves objects from `/pick_place_scene/objects` and TF frames such as `pick_cube_red`; the returned `PoseStamped` is in the requested frame or the arm base frame by default. `/grasp_object` and `/place_object` are simulation-ready action primitives: they detect the requested fixture, move through hover/approach/lift or hover/release/retreat poses, and keep simple held-object bookkeeping.
+
+Example action calls in the first arm namespace:
+
+```bash
+ros2 action send_goal /arm_1/detect_object manipulator_action_interfaces/action/DetectObject "{query: red_cube, kind: cube}"
+ros2 action send_goal /arm_1/grasp_object manipulator_action_interfaces/action/GraspObject "{object_id: red_cube}"
+ros2 action send_goal /arm_1/place_object manipulator_action_interfaces/action/PlaceObject "{target_id: blue_place_pad}"
+```
 
 Use the CLI for common commands:
 
@@ -185,6 +208,16 @@ The multi-arm launch can also start a tree runner automatically in each arm name
 ros2 launch custom_servo_demo multi_servo_example.launch.py behavior_tree_name:=demo_pick_tree
 BEHAVIOR_TREE_NAME=demo_pick_tree /home/rosuser/start_simulation.sh --restart
 ```
+
+For the camera-integrated demo scene, run:
+
+```bash
+ros2 run manipulator_actions py_trees_runner camera_pick_place_demo --ros-args -r __ns:=/arm_1
+```
+
+That tree waits for `/arm_1/wrist_camera/image_raw`, detects the red cube, runs
+the simulated grasp action, detects the blue place pad, then runs the simulated
+place action.
 
 ### Joystick / `sensor_msgs/msg/Joy` Control
 
@@ -295,8 +328,14 @@ Useful namespaced interfaces:
 -   `/arm_1/end_effector_pose_relative`
 -   `/arm_1/move_end_effector`
 -   `/arm_1/run_sequence`
+-   `/arm_1/detect_object`
+-   `/arm_1/grasp_object`
+-   `/arm_1/place_object`
 -   `/arm_1/wrist_camera/image_raw`
 -   `/arm_1/wrist_camera/camera_info`
+-   `/scene_camera/image_raw`
+-   `/scene_camera/camera_info`
+-   `/pick_place_scene/objects`
 
 For example, move the second arm with a synthetic Joy message:
 
@@ -317,12 +356,18 @@ The launch accepts:
 -   `behavior_tree_timeout`: optional behavior tree timeout in seconds, default `60.0`
 -   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
 -   `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
+-   `scene_config`: YAML file defining cubes, place pads, and Charuco-style boards
+-   `launch_scene_camera`: launch the fixed overhead camera, default `true`
 
 The startup helper maps these launch arguments from options and environment variables:
 
 -   `--arm-count` / `ARM_COUNT`: defaults to `1`
 -   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
 -   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
+-   `--scene-config` / `PICK_PLACE_SCENE_CONFIG`: override the default pick-place fixtures
+-   `--no-scene-camera` / `LAUNCH_SCENE_CAMERA=false`: disable the fixed overhead camera
+-   `WRIST_CAMERA_OFFSET_ROLL`, `WRIST_CAMERA_OFFSET_PITCH`, `WRIST_CAMERA_OFFSET_YAW`: tune the Gazebo wrist camera mount orientation; pitch defaults to `-1.5708` so the simulated optical axis is aimed down into the workspace from the hand
+-   `WRIST_CAMERA_LOOK_AT_FRAME`: scene frame the simulated wrist camera points at while its position follows the hand, default `pick_place_table`
 -   `USE_JOY_TELEOP`: defaults to `true`
 -   `USE_POSE_STAMPED_CONTROL`: defaults to `true`
 -   `LAUNCH_ACTION_SERVERS`: defaults to `true`
@@ -330,7 +375,9 @@ The startup helper maps these launch arguments from options and environment vari
 -   `BEHAVIOR_TREE_NAME`: defaults to empty
 -   `BEHAVIOR_TREE_TIMEOUT`: defaults to `60.0`
 
-This is one RViz/ROS-control simulation scene with prefixed robot models and a shared global TF tree. The Gazebo process is still the existing wrist-camera/world helper, not three separate Gazebo robot simulations.
+This is one RViz/ROS-control simulation scene with prefixed robot models and a shared global TF tree. The Gazebo process is the camera and fixture world: it generates objects from the scene YAML and publishes TF frames such as `pick_cube_red`, `place_target_blue`, and `charuco_board` for demos or future perception replacement.
+
+Gazebo sensors publish on private transport topics under `/pick_place_sim/cameras/...`; the launch remaps only the intended bridges back to the public ROS topics above. This keeps older dummy camera worlds from racing the pick-place camera stream if they are accidentally left around.
 
 Reusable routines live in `manipulator_actions/config/sequences/*.yaml`:
 

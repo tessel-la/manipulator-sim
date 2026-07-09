@@ -15,7 +15,7 @@ services:
       - XAUTHORITY=/home/rosuser/.Xauthority
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
-      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       - FASTDDS_BUILTIN_TRANSPORTS=${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
       - CYCLONEDDS_URI=${CYCLONEDDS_URI:-file:///etc/cyclonedds/config.xml}
       - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-1}

@@ -58,6 +58,11 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME gazebo_wrist_camera_follower
 )
+install(PROGRAMS
+  scripts/pick_place_scene_publisher.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME pick_place_scene_publisher
+)
 
 ament_export_dependencies(${THIS_PACKAGE_INCLUDE_DEPENDS})
 
