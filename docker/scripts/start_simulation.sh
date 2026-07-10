@@ -16,7 +16,8 @@ Options:
   --arm-prefix PREFIX      Namespace prefix for arms (default: ${ARM_PREFIX:-arm})
   --scene-config PATH      Pick-place scene YAML for Gazebo cameras
   --no-gazebo-camera       Disable Gazebo wrist cameras
-  --no-scene-camera        Disable the fixed overhead scene camera
+  --scene-camera           Enable the fixed overhead scene camera
+  --no-scene-camera        Disable the fixed overhead scene camera (default)
   --restart                Restart the tmux session before launching
   -h, --help               Show this help
 
@@ -80,6 +81,10 @@ while [[ $# -gt 0 ]]; do
       LAUNCH_SCENE_CAMERA=false
       shift
       ;;
+    --scene-camera)
+      LAUNCH_SCENE_CAMERA=true
+      shift
+      ;;
     --restart)
       RESTART_SESSION=true
       shift
@@ -108,7 +113,7 @@ export USE_POSE_STAMPED_CONTROL="${USE_POSE_STAMPED_CONTROL:-true}"
 export LAUNCH_ACTION_SERVERS="${LAUNCH_ACTION_SERVERS:-true}"
 export PREPARE_SERVO="${PREPARE_SERVO:-true}"
 export USE_GAZEBO_CAMERA="${USE_GAZEBO_CAMERA:-true}"
-export LAUNCH_SCENE_CAMERA="${LAUNCH_SCENE_CAMERA:-true}"
+export LAUNCH_SCENE_CAMERA="${LAUNCH_SCENE_CAMERA:-false}"
 export PICK_PLACE_SCENE_CONFIG="${PICK_PLACE_SCENE_CONFIG:-${WORKSPACE}/src/custom_servo_demo/config/pick_place_scene.yaml}"
 export WRIST_CAMERA_OFFSET_ROLL="${WRIST_CAMERA_OFFSET_ROLL:-0.0}"
 export WRIST_CAMERA_OFFSET_PITCH="${WRIST_CAMERA_OFFSET_PITCH:--1.5708}"

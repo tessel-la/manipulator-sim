@@ -103,8 +103,8 @@ The Gazebo wrist-camera setup supports up to three arms. For higher counts, disa
 
 The Gazebo pane now builds a camera-visible pick-place scene from
 `custom_servo_demo/config/pick_place_scene.yaml`: colored cubes, a blue place
-pad, a Charuco-style board, one wrist camera per arm, and a fixed overhead
-`/scene_camera/image_raw` stream.
+pad, a Charuco-style board, and one wrist camera per arm. The fixed overhead
+`/scene_camera/image_raw` stream is disabled by default.
 
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
 1.  **multi_servo_launch**: Runs `ros2 launch custom_servo_demo multi_servo_example.launch.py` with `ARM_COUNT=1` and `ARM_PREFIX=arm` by default, creating `/arm_1`.
@@ -333,8 +333,8 @@ Useful namespaced interfaces:
 -   `/arm_1/place_object`
 -   `/arm_1/wrist_camera/image_raw`
 -   `/arm_1/wrist_camera/camera_info`
--   `/scene_camera/image_raw`
--   `/scene_camera/camera_info`
+-   `/scene_camera/image_raw` when `LAUNCH_SCENE_CAMERA=true`
+-   `/scene_camera/camera_info` when `LAUNCH_SCENE_CAMERA=true`
 -   `/pick_place_scene/objects`
 
 For example, move the second arm with a synthetic Joy message:
@@ -357,7 +357,7 @@ The launch accepts:
 -   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
 -   `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
 -   `scene_config`: YAML file defining cubes, place pads, and Charuco-style boards
--   `launch_scene_camera`: launch the fixed overhead camera, default `true`
+-   `launch_scene_camera`: launch the fixed overhead camera, default `false`
 
 The startup helper maps these launch arguments from options and environment variables:
 
@@ -365,7 +365,8 @@ The startup helper maps these launch arguments from options and environment vari
 -   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
 -   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
 -   `--scene-config` / `PICK_PLACE_SCENE_CONFIG`: override the default pick-place fixtures
--   `--no-scene-camera` / `LAUNCH_SCENE_CAMERA=false`: disable the fixed overhead camera
+-   `--scene-camera` / `LAUNCH_SCENE_CAMERA=true`: enable the fixed overhead camera
+-   `--no-scene-camera` / `LAUNCH_SCENE_CAMERA=false`: keep the fixed overhead camera disabled
 -   `WRIST_CAMERA_OFFSET_ROLL`, `WRIST_CAMERA_OFFSET_PITCH`, `WRIST_CAMERA_OFFSET_YAW`: tune the Gazebo wrist camera mount orientation; pitch defaults to `-1.5708` so the simulated optical axis is aimed down into the workspace from the hand
 -   `WRIST_CAMERA_LOOK_AT_FRAME`: scene frame the simulated wrist camera points at while its position follows the hand, default `pick_place_table`
 -   `USE_JOY_TELEOP`: defaults to `true`
