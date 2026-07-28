@@ -39,7 +39,7 @@ class PickPlaceScenePublisher(Node):
         super().__init__("pick_place_scene_publisher")
         self.declare_parameter("scene_config", "")
         self.declare_parameter("frame_id", "world")
-        self.declare_parameter("publish_period", 1.0)
+        self.declare_parameter("publish_period", 0.0)
 
         config_path = Path(str(self.get_parameter("scene_config").value))
         if not config_path.is_file():
@@ -53,8 +53,9 @@ class PickPlaceScenePublisher(Node):
 
         self.transforms = self._transforms_from_scene()
         self.broadcaster.sendTransform(self.transforms)
-        period = max(float(self.get_parameter("publish_period").value), 0.1)
-        self.create_timer(period, self._publish_scene)
+        period = float(self.get_parameter("publish_period").value)
+        if period > 0.0:
+            self.create_timer(max(period, 0.1), self._publish_scene)
         self._publish_scene()
         self.get_logger().info(
             f"Published {len(self.transforms)} pick-place scene frame(s) from {config_path}"

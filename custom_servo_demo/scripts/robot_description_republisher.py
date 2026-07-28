@@ -13,11 +13,28 @@ class RobotDescriptionRepublisher(Node):
         self.declare_parameter("robot_description", "")
         self.declare_parameter("topic_name", "/robot_description")
         self.declare_parameter("publish_period", 1.0)
+        self.declare_parameter(
+            "additional_topic_names", rclpy.Parameter.Type.STRING_ARRAY
+        )
+        self.declare_parameter(
+            "additional_robot_descriptions", rclpy.Parameter.Type.STRING_ARRAY
+        )
 
         self._description = (
             self.get_parameter("robot_description").get_parameter_value().string_value
         )
         self._topic_name = self.get_parameter("topic_name").get_parameter_value().string_value
+        additional_topic_names = list(
+            self.get_parameter("additional_topic_names").value
+        )
+        additional_descriptions = list(
+            self.get_parameter("additional_robot_descriptions").value
+        )
+        if len(additional_topic_names) != len(additional_descriptions):
+            raise ValueError(
+                "additional_topic_names and additional_robot_descriptions "
+                "must have the same length"
+            )
         publish_period = (
             self.get_parameter("publish_period").get_parameter_value().double_value
         )
@@ -27,11 +44,16 @@ class RobotDescriptionRepublisher(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             reliability=ReliabilityPolicy.RELIABLE,
         )
-        self._publisher = self.create_publisher(String, self._topic_name, qos_profile)
+        self._publishers = []
+        self._messages = []
         self._qos_profile = qos_profile
         self._timer = None
-        self._message = None
         self._subscription = None
+
+        for topic_name, description in zip(
+            additional_topic_names, additional_descriptions
+        ):
+            self._add_publication(topic_name, description)
 
         if not self._description:
             self.get_logger().info(
@@ -43,9 +65,13 @@ class RobotDescriptionRepublisher(Node):
                 self._store_description,
                 self._qos_profile,
             )
+            self._publish_all()
+            if publish_period > 0.0 and self._messages:
+                self._timer = self.create_timer(publish_period, self._publish_all)
             return
 
-        self._start_publishing(self._description, publish_period)
+        self._add_publication(self._topic_name, self._description)
+        self._start_publishing(publish_period)
 
     def _store_description(self, message):
         if not message.data:
@@ -57,27 +83,35 @@ class RobotDescriptionRepublisher(Node):
         if self._subscription is not None:
             self.destroy_subscription(self._subscription)
             self._subscription = None
-        self._start_publishing(message.data, publish_period)
+        self._add_publication(self._topic_name, message.data)
+        self._start_publishing(publish_period)
 
-    def _start_publishing(self, description, publish_period):
-        self._message = String()
-        self._message.data = description
-        self._publish_description()
+    def _add_publication(self, topic_name, description):
+        publisher = self.create_publisher(String, topic_name, self._qos_profile)
+        message = String()
+        message.data = description
+        self._publishers.append(publisher)
+        self._messages.append(message)
+
+    def _start_publishing(self, publish_period):
+        self._publish_all()
         if publish_period <= 0.0:
             self.get_logger().info(
-                f"Published robot_description on {self._topic_name} with transient-local QoS"
+                f"Published {len(self._messages)} robot description topic(s) "
+                "with transient-local QoS"
             )
             return
 
-        self._timer = self.create_timer(publish_period, self._publish_description)
+        if self._timer is None:
+            self._timer = self.create_timer(publish_period, self._publish_all)
         self.get_logger().info(
-            f"Publishing robot_description on {self._topic_name} every {publish_period:.2f}s"
+            f"Publishing {len(self._messages)} robot description topic(s) "
+            f"every {publish_period:.2f}s"
         )
 
-    def _publish_description(self):
-        if self._message is None:
-            return
-        self._publisher.publish(self._message)
+    def _publish_all(self):
+        for publisher, message in zip(self._publishers, self._messages):
+            publisher.publish(message)
 
 
 def main(args=None):

@@ -10,6 +10,11 @@ services:
     tty: true          # Allocates a TTY
     stdin_open: true   # Keeps STDIN open, allowing for interactive shells
     privileged: true   # Needed for some hardware access, use with caution
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - DISPLAY=${DISPLAY}
       - XAUTHORITY=/home/rosuser/.Xauthority
@@ -19,7 +24,8 @@ services:
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       - FASTDDS_BUILTIN_TRANSPORTS=${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
       - CYCLONEDDS_URI=${CYCLONEDDS_URI:-file:///etc/cyclonedds/config.xml}
-      - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-1}
+      - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-auto}
+      - COLCON_EXECUTOR=${COLCON_EXECUTOR:-sequential}
       - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions behaviour_bridge}
       - LAUNCH_SCENE_CAMERA=${LAUNCH_SCENE_CAMERA:-false}
     volumes:

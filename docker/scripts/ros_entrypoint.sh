@@ -31,23 +31,59 @@ fi
 WORKSPACE="${MOVEIT_WS:-/home/${USERNAME}/moveit_ws}"
 DEFAULT_PACKAGES="custom_servo_demo manipulator_action_interfaces manipulator_actions"
 PACKAGES="${COLCON_PACKAGES:-${DEFAULT_PACKAGES}}"
+BUILD_MODE="${AUTO_BUILD_WORKSPACE:-auto}"
+BUILD_STAMP="${WORKSPACE}/install/.manipulator_sim_build_stamp"
+COLCON_EXECUTOR="${COLCON_EXECUTOR:-sequential}"
 
-build_workspace() {
-  if [ "${AUTO_BUILD_WORKSPACE:-0}" != "1" ]; then
-    return
+workspace_needs_build() {
+  if [ ! -f "${WORKSPACE}/install/setup.bash" ] || [ ! -f "${BUILD_STAMP}" ]; then
+    return 0
   fi
 
+  local package
+  for package in ${PACKAGES}; do
+    if [ -d "${WORKSPACE}/src/${package}" ] && \
+      find "${WORKSPACE}/src/${package}" -type f -newer "${BUILD_STAMP}" -print -quit | grep -q .; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+build_workspace() {
   if [ ! -d "${WORKSPACE}/src" ]; then
     echo "Workspace source directory not found: ${WORKSPACE}/src"
     return
   fi
 
+  case "${BUILD_MODE,,}" in
+    0|false|no|off)
+      echo "Workspace auto-build disabled."
+      return
+      ;;
+    auto)
+      if ! workspace_needs_build; then
+        echo "Workspace is up to date; skipping colcon build."
+        return
+      fi
+      ;;
+    1|true|yes|on)
+      ;;
+    *)
+      echo "AUTO_BUILD_WORKSPACE must be auto, 1, or 0; got '${BUILD_MODE}'." >&2
+      exit 2
+      ;;
+  esac
+
   echo "Building ROS workspace packages: ${PACKAGES}"
   cd "${WORKSPACE}"
   colcon build \
     --symlink-install \
+    --executor "${COLCON_EXECUTOR}" \
     --packages-select ${PACKAGES} \
     --cmake-args -DCMAKE_BUILD_TYPE=Release
+  touch "${BUILD_STAMP}"
 }
 
 build_workspace

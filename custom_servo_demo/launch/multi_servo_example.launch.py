@@ -15,7 +15,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_param_builder import ParameterBuilder
 from moveit_configs_utils import MoveItConfigsBuilder
 
@@ -198,6 +198,7 @@ def _arm_actions(context):
     use_joy_teleop = LaunchConfiguration("use_joy_teleop")
     use_pose_stamped_control = LaunchConfiguration("use_pose_stamped_control")
     launch_action_servers = LaunchConfiguration("launch_action_servers")
+    runtime_executor_threads = LaunchConfiguration("runtime_executor_threads")
     prepare_servo = LaunchConfiguration("prepare_servo")
     behavior_tree_name = LaunchConfiguration("behavior_tree_name").perform(context).strip()
     behavior_tree_timeout = LaunchConfiguration("behavior_tree_timeout")
@@ -234,6 +235,10 @@ def _arm_actions(context):
     robot_description = moveit_config.robot_description["robot_description"]
     robot_description_semantic = moveit_config.robot_description_semantic[
         "robot_description_semantic"
+    ]
+    arm_descriptions = [
+        _prefixed_urdf(robot_description, namespace, xyz)
+        for namespace, xyz in zip(namespaces, poses)
     ]
     aggregate_description = _aggregate_urdf(robot_description, namespaces, poses)
     aggregate_robot_description = {"robot_description": aggregate_description}
@@ -274,7 +279,15 @@ def _arm_actions(context):
             name="multi_robot_description_republisher",
             parameters=[
                 aggregate_robot_description,
-                {"topic_name": "/robot_description", "publish_period": 0.0},
+                {
+                    "topic_name": "/robot_description",
+                    "publish_period": 0.0,
+                    "additional_topic_names": [
+                        f"/{namespace}/robot_description"
+                        for namespace in namespaces
+                    ],
+                    "additional_robot_descriptions": arm_descriptions,
+                },
             ],
             output="screen",
         ),
@@ -306,8 +319,7 @@ def _arm_actions(context):
     )
     actions.append(camera_launch)
 
-    for namespace, xyz in zip(namespaces, poses):
-        arm_description = _prefixed_urdf(robot_description, namespace, xyz)
+    for namespace, arm_description in zip(namespaces, arm_descriptions):
         arm_robot_description = {"robot_description": arm_description}
         arm_semantic = {
             "robot_description_semantic": _prefixed_srdf(
@@ -322,20 +334,6 @@ def _arm_actions(context):
 
         actions.extend(
             [
-                launch_ros.actions.Node(
-                    package="custom_servo_demo",
-                    executable="robot_description_republisher",
-                    namespace=namespace,
-                    name="robot_description_republisher",
-                    parameters=[
-                        arm_robot_description,
-                        {
-                            "topic_name": "robot_description",
-                            "publish_period": 0.0,
-                        },
-                    ],
-                    output="screen",
-                ),
                 launch_ros.actions.Node(
                     package="controller_manager",
                     executable="ros2_control_node",
@@ -428,9 +426,8 @@ def _arm_actions(context):
                 ),
                 launch_ros.actions.Node(
                     package="manipulator_actions",
-                    executable="pose_stamped_control",
+                    executable="manipulator_runtime",
                     namespace=namespace,
-                    name="pose_stamped_end_effector_control",
                     parameters=[
                         {
                             "base_frame": f"{namespace}_panda_link0",
@@ -442,37 +439,23 @@ def _arm_actions(context):
                             ),
                             "absolute_pose_topic": "end_effector_pose_absolute",
                             "relative_pose_topic": "end_effector_pose_relative",
+                            "enable_pose_stamped_control": use_pose_stamped_control,
+                            "enable_action_servers": launch_action_servers,
+                            "runtime_executor_threads": runtime_executor_threads,
                         }
                     ],
-                    condition=IfCondition(use_pose_stamped_control),
                     output="screen",
-                ),
-                launch_ros.actions.Node(
-                    package="manipulator_actions",
-                    executable="action_server",
-                    namespace=namespace,
-                    name="manipulator_action_server",
-                    parameters=[
-                        {
-                            "base_frame": f"{namespace}_panda_link0",
-                            "ee_frame": f"{namespace}_panda_link8",
-                            "twist_topic": "servo_node/delta_twist_cmds",
-                            "pause_servo_service": "servo_node/pause_servo",
-                            "switch_command_type_service": (
-                                "servo_node/switch_command_type"
-                            ),
-                        }
-                    ],
-                    condition=IfCondition(launch_action_servers),
-                    output="screen",
-                ),
-                launch_ros.actions.Node(
-                    package="manipulator_actions",
-                    executable="behavior_tree_runtime_server",
-                    namespace=namespace,
-                    name="behavior_tree_runtime_server",
-                    condition=IfCondition(launch_action_servers),
-                    output="screen",
+                    condition=IfCondition(
+                        PythonExpression(
+                            [
+                                "'",
+                                use_pose_stamped_control,
+                                "'.lower() in ('true', '1', 'yes', 'on') or '",
+                                launch_action_servers,
+                                "'.lower() in ('true', '1', 'yes', 'on')",
+                            ]
+                        )
+                    ),
                 ),
             ]
         )
@@ -527,6 +510,11 @@ def generate_launch_description():
                 "launch_action_servers",
                 default_value="true",
                 description="Launch one manipulator action server per arm namespace",
+            ),
+            DeclareLaunchArgument(
+                "runtime_executor_threads",
+                default_value="4",
+                description="Worker threads shared by each arm's Python runtime",
             ),
             DeclareLaunchArgument(
                 "prepare_servo",

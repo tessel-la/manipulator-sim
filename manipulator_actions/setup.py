@@ -27,6 +27,7 @@ setup(
             "pose_stamped_control = manipulator_actions.pose_stamped_control:main",
             "py_trees_runner = manipulator_actions.py_trees_runner:main",
             "behavior_tree_runtime_server = manipulator_actions.behavior_tree_runtime_server:main",
+            "manipulator_runtime = manipulator_actions.runtime:main",
         ],
     },
 )

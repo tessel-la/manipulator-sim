@@ -49,7 +49,7 @@ This command builds the Docker image and the ROS workspace packages copied into 
 docker compose build
 ```
 
-This process might take some time, especially on the first build, as it downloads the ROS 2 Jazzy base image, installs MoveIt 2 dependencies, and builds the workspace.
+This process might take some time, especially on the first build, as it downloads the ROS 2 Jazzy base image, installs the runtime dependencies used by the launch files, and builds the workspace.
 
 The Compose workspace cache volumes are named with a `jazzy` suffix so older Humble `install` setup files are not reused by accident.
 
@@ -61,13 +61,16 @@ Once the image is built, you can start the container using Docker Compose:
 docker compose up -d
 ```
 
-This starts the `manipulator_sim_service` container in detached mode. On startup, the entrypoint sources ROS and rebuilds the mounted ROS workspace packages into Docker-managed `build`, `install`, and `log` volumes.
+This starts the `manipulator_sim_service` container in detached mode. On the first startup, the entrypoint builds the mounted ROS workspace packages into Docker-managed `build`, `install`, and `log` volumes. Later startups use `AUTO_BUILD_WORKSPACE=auto` and skip `colcon` unless a mounted source file is newer than the last successful build.
 
-To disable the automatic workspace rebuild for faster container startup:
+Force or disable the startup build when needed:
 
 ```bash
+AUTO_BUILD_WORKSPACE=1 docker compose up -d
 AUTO_BUILD_WORKSPACE=0 docker compose up -d
 ```
+
+Startup builds use the sequential colcon executor by default to limit peak memory while Robo-Boy is running. Override it with `COLCON_EXECUTOR=parallel` when build speed matters more than peak usage.
 
 ### 4. Enter the Container and Start the Simulation
 
@@ -83,7 +86,13 @@ Once inside the container's bash shell, start the simulation helper:
 /home/rosuser/start_simulation.sh
 ```
 
-By default, this starts one arm as `/arm_1`. Spawn more arms through the same helper:
+By default, this starts one arm as `/arm_1`. RViz stays off because Robo-Boy already provides the 3D view; all robot-description and TF topics remain available. Enable the local RViz window when it is useful:
+
+```bash
+/home/rosuser/start_simulation.sh --rviz
+```
+
+Spawn more arms through the same helper:
 
 ```bash
 /home/rosuser/start_simulation.sh --arm-count 2
@@ -117,8 +126,22 @@ You can also override other startup defaults through helper options or environme
 
 ```bash
 /home/rosuser/start_simulation.sh --arm-count 2 --arm-prefix robot --no-gazebo-camera
-ARM_COUNT=2 ARM_PREFIX=robot USE_GAZEBO_CAMERA=false /home/rosuser/start_simulation.sh
+ARM_COUNT=2 ARM_PREFIX=robot USE_RVIZ=true USE_GAZEBO_CAMERA=false /home/rosuser/start_simulation.sh
 ```
+
+### Running beside Robo-Boy
+
+Use Robo-Boy's environment file when creating the simulator so both ROS containers receive the same domain, discovery, and DDS middleware settings:
+
+```bash
+cd /path/to/manipulator-sim
+docker compose --env-file ../robo-boy/.env -f docker-compose.yml up -d --build
+
+cd ../robo-boy
+docker compose up -d --build
+```
+
+The normal simulator helper is already the lightweight integration mode: it leaves RViz off, keeps the wrist-camera stream on, publishes the aggregate and namespaced robot descriptions from one process, and still starts every action, behavior-tree, Joy, PoseStamped, TF, camera, and mesh endpoint expected by Robo-Boy.
 
 Use another pick-place fixture layout without editing the launch files:
 
@@ -351,6 +374,7 @@ The launch accepts:
 -   `use_joy_teleop`: launch one Joy bridge per arm, default `true`
 -   `use_pose_stamped_control`: launch one PoseStamped bridge per arm, default `true`
 -   `launch_action_servers`: launch one action server per arm, default `true`
+-   `runtime_executor_threads`: threads shared by each arm's PoseStamped, action, and behavior-tree nodes, default `4`
 -   `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
 -   `behavior_tree_name`: optional behavior tree to run once per arm namespace, default empty
 -   `behavior_tree_timeout`: optional behavior tree timeout in seconds, default `60.0`
@@ -363,6 +387,8 @@ The startup helper maps these launch arguments from options and environment vari
 
 -   `--arm-count` / `ARM_COUNT`: defaults to `1`
 -   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
+-   `--rviz` / `USE_RVIZ=true`: enable RViz; the startup helper defaults it to disabled for Robo-Boy use
+-   `--no-rviz` / `USE_RVIZ=false`: explicitly keep RViz disabled
 -   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
 -   `--scene-config` / `PICK_PLACE_SCENE_CONFIG`: override the default pick-place fixtures
 -   `--scene-camera` / `LAUNCH_SCENE_CAMERA=true`: enable the fixed overhead camera
@@ -372,6 +398,7 @@ The startup helper maps these launch arguments from options and environment vari
 -   `USE_JOY_TELEOP`: defaults to `true`
 -   `USE_POSE_STAMPED_CONTROL`: defaults to `true`
 -   `LAUNCH_ACTION_SERVERS`: defaults to `true`
+-   `RUNTIME_EXECUTOR_THREADS`: defaults to `4`
 -   `PREPARE_SERVO`: defaults to `true`
 -   `BEHAVIOR_TREE_NAME`: defaults to empty
 -   `BEHAVIOR_TREE_TIMEOUT`: defaults to `60.0`
@@ -402,7 +429,7 @@ colcon build --symlink-install --packages-select custom_servo_demo manipulator_a
 source install/setup.bash
 ```
 
-The same package list is also used by the Docker entrypoint via the `COLCON_PACKAGES` environment variable in `docker-compose.yml`.
+The same package list is also used by the Docker entrypoint via the `COLCON_PACKAGES` environment variable in `docker-compose.yml`. In the default `AUTO_BUILD_WORKSPACE=auto` mode, a successful build writes a stamp into the install volume and future starts rebuild only when one of those package source trees changes.
 
 ### 6. Interacting with Tmux (Attaching/Detaching)
 

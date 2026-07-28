@@ -16,17 +16,19 @@ Options:
   --arm-prefix PREFIX      Namespace prefix for arms (default: ${ARM_PREFIX:-arm})
   --scene-config PATH      Pick-place scene YAML for Gazebo cameras
   --no-gazebo-camera       Disable Gazebo wrist cameras
+  --rviz                   Enable the local RViz window
+  --no-rviz                Disable the local RViz window (default)
   --scene-camera           Enable the fixed overhead scene camera
   --no-scene-camera        Disable the fixed overhead scene camera (default)
   --restart                Restart the tmux session before launching
   -h, --help               Show this help
 
 Environment variables are still supported:
-  ARM_COUNT, ARM_PREFIX, USE_JOY_TELEOP, USE_POSE_STAMPED_CONTROL,
+  ARM_COUNT, ARM_PREFIX, USE_RVIZ, USE_JOY_TELEOP, USE_POSE_STAMPED_CONTROL,
   LAUNCH_ACTION_SERVERS, PREPARE_SERVO, USE_GAZEBO_CAMERA,
   LAUNCH_SCENE_CAMERA, PICK_PLACE_SCENE_CONFIG, BEHAVIOR_TREE_NAME,
-  BEHAVIOR_TREE_TIMEOUT, WRIST_CAMERA_OFFSET_ROLL, WRIST_CAMERA_OFFSET_PITCH,
-  WRIST_CAMERA_OFFSET_YAW, WRIST_CAMERA_LOOK_AT_FRAME
+  BEHAVIOR_TREE_TIMEOUT, RUNTIME_EXECUTOR_THREADS, WRIST_CAMERA_OFFSET_ROLL,
+  WRIST_CAMERA_OFFSET_PITCH, WRIST_CAMERA_OFFSET_YAW, WRIST_CAMERA_LOOK_AT_FRAME
 EOF
 }
 
@@ -77,6 +79,14 @@ while [[ $# -gt 0 ]]; do
       USE_GAZEBO_CAMERA=false
       shift
       ;;
+    --rviz)
+      USE_RVIZ=true
+      shift
+      ;;
+    --no-rviz)
+      USE_RVIZ=false
+      shift
+      ;;
     --no-scene-camera)
       LAUNCH_SCENE_CAMERA=false
       shift
@@ -108,9 +118,11 @@ fi
 
 export ARM_COUNT="${ARM_COUNT:-1}"
 export ARM_PREFIX="${ARM_PREFIX:-arm}"
+export USE_RVIZ="${USE_RVIZ:-false}"
 export USE_JOY_TELEOP="${USE_JOY_TELEOP:-true}"
 export USE_POSE_STAMPED_CONTROL="${USE_POSE_STAMPED_CONTROL:-true}"
 export LAUNCH_ACTION_SERVERS="${LAUNCH_ACTION_SERVERS:-true}"
+export RUNTIME_EXECUTOR_THREADS="${RUNTIME_EXECUTOR_THREADS:-4}"
 export PREPARE_SERVO="${PREPARE_SERVO:-true}"
 export USE_GAZEBO_CAMERA="${USE_GAZEBO_CAMERA:-true}"
 export LAUNCH_SCENE_CAMERA="${LAUNCH_SCENE_CAMERA:-false}"

@@ -17,77 +17,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash-completion \
     build-essential \
     cmake \
-    curl \
-    gdb \
-    git \
-    nano \
-    openssh-client \
     python3-colcon-common-extensions \
-    python3-colcon-mixin \
-    python3-rosdep \
     python3-yaml \
-    python3-vcstool \
     ruby \
-    ruby-dev \
     sudo \
     tmux \
-    vim \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
     ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
-    ros-${ROS_DISTRO}-control-msgs \
-    ros-${ROS_DISTRO}-control-toolbox \
     ros-${ROS_DISTRO}-controller-manager \
-    ros-${ROS_DISTRO}-generate-parameter-library \
-    ros-${ROS_DISTRO}-geometric-shapes \
-    ros-${ROS_DISTRO}-geometry-msgs \
     ros-${ROS_DISTRO}-gripper-controllers \
-    ros-${ROS_DISTRO}-interactive-markers \
     ros-${ROS_DISTRO}-joint-state-broadcaster \
-    ros-${ROS_DISTRO}-joint-state-publisher-gui \
     ros-${ROS_DISTRO}-joint-trajectory-controller \
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-launch-param-builder \
-    ros-${ROS_DISTRO}-moveit \
     ros-${ROS_DISTRO}-moveit-configs-utils \
-    ros-${ROS_DISTRO}-moveit-core \
-    ros-${ROS_DISTRO}-moveit-hybrid-planning \
-    ros-${ROS_DISTRO}-moveit-kinematics \
-    ros-${ROS_DISTRO}-moveit-msgs \
-    ros-${ROS_DISTRO}-moveit-planners \
-    ros-${ROS_DISTRO}-moveit-plugins \
-    ros-${ROS_DISTRO}-moveit-resources-panda-description \
     ros-${ROS_DISTRO}-moveit-resources-panda-moveit-config \
-    ros-${ROS_DISTRO}-moveit-ros-move-group \
-    ros-${ROS_DISTRO}-moveit-ros-perception \
-    ros-${ROS_DISTRO}-moveit-ros-planning \
-    ros-${ROS_DISTRO}-moveit-ros-planning-interface \
-    ros-${ROS_DISTRO}-moveit-ros-robot-interaction \
-    ros-${ROS_DISTRO}-moveit-ros-visualization \
-    ros-${ROS_DISTRO}-moveit-runtime \
     ros-${ROS_DISTRO}-moveit-servo \
-    ros-${ROS_DISTRO}-moveit-setup-assistant \
-    ros-${ROS_DISTRO}-moveit-simple-controller-manager \
-    ros-${ROS_DISTRO}-moveit-task-constructor-core \
-    ros-${ROS_DISTRO}-moveit-visual-tools \
-    ros-${ROS_DISTRO}-pluginlib \
     ros-${ROS_DISTRO}-py-trees \
-    ros-${ROS_DISTRO}-realtime-tools \
     ros-${ROS_DISTRO}-robot-state-publisher \
     ros-${ROS_DISTRO}-ros-gz-bridge \
     ros-${ROS_DISTRO}-ros-gz-sim \
-    ros-${ROS_DISTRO}-ros-base \
-    ros-${ROS_DISTRO}-ros2-control \
+    ros-${ROS_DISTRO}-ros2controlcli \
     ros-${ROS_DISTRO}-rosidl-default-generators \
-    ros-${ROS_DISTRO}-rviz-visual-tools \
     ros-${ROS_DISTRO}-rviz2 \
-    ros-${ROS_DISTRO}-sensor-msgs \
-    ros-${ROS_DISTRO}-std-msgs \
-    ros-${ROS_DISTRO}-std-srvs \
-    ros-${ROS_DISTRO}-tf2-eigen \
-    ros-${ROS_DISTRO}-tf2-geometry-msgs \
-    ros-${ROS_DISTRO}-tf2-ros \
-    ros-${ROS_DISTRO}-trajectory-msgs \
-    ros-${ROS_DISTRO}-xacro \
     && gem install tmuxinator \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -140,7 +92,6 @@ RUN chmod +x \
     /home/${USERNAME}/start_simulation.sh
 
 ENV SHELL=/bin/bash
-ENV EDITOR=vim
 ENV MOVEIT_WS=/home/${USERNAME}/moveit_ws
 ENV COLCON_PACKAGES="custom_servo_demo manipulator_action_interfaces manipulator_actions"
 
