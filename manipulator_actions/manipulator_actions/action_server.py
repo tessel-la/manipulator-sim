@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped
 import rclpy
 from rclpy.action import ActionServer, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from ros_gz_interfaces.msg import Entity
+from ros_gz_interfaces.srv import SetEntityPose
 from std_msgs.msg import String
 from tf2_ros import TransformException
 
@@ -37,6 +40,11 @@ from manipulator_actions.sequences import (
     resolve_sequence_file,
     sequence_search_paths,
 )
+from manipulator_actions.simulated_scene import (
+    attached_position,
+    attachment_offset,
+    placement_position,
+)
 
 
 class ManipulatorActionServer(Node):
@@ -57,6 +65,11 @@ class ManipulatorActionServer(Node):
         self.declare_parameter("tf_timeout", 5.0)
         self.declare_parameter("sequence_directories", "")
         self.declare_parameter("scene_topic", "/pick_place_scene/objects")
+        self.declare_parameter("scene_fixed_frame", "world")
+        self.declare_parameter(
+            "set_entity_pose_service", "/world/default/set_pose"
+        )
+        self.declare_parameter("held_object_update_rate", 10.0)
         self.declare_parameter("grasp_hover_height", 0.25)
         self.declare_parameter("grasp_approach_height", 0.13)
         self.declare_parameter("place_hover_height", 0.25)
@@ -77,6 +90,25 @@ class ManipulatorActionServer(Node):
         )
         self._scene_objects: List[Dict] = []
         self._held_object: Optional[Dict] = None
+        self._held_object_offset: Optional[tuple[float, float, float]] = None
+        self._held_object_orientation = None
+        self._object_world_poses: Dict[str, Pose] = {}
+        self._held_object_lock = threading.RLock()
+        self._warned_about_set_pose = False
+        self._set_pose_client = self.create_client(
+            SetEntityPose,
+            str(self.get_parameter("set_entity_pose_service").value),
+            callback_group=self._callback_group,
+        )
+        held_object_update_rate = max(
+            float(self.get_parameter("held_object_update_rate").value),
+            1.0,
+        )
+        self._held_object_timer = self.create_timer(
+            1.0 / held_object_update_rate,
+            self._update_held_object_pose,
+            callback_group=self._callback_group,
+        )
         scene_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._scene_sub = self.create_subscription(
             String,
@@ -343,6 +375,7 @@ class ManipulatorActionServer(Node):
             steps,
             timeout,
             close_pause=True,
+            scene_object=scene_object,
         )
         if not success:
             result.success = False
@@ -353,9 +386,8 @@ class ManipulatorActionServer(Node):
                 goal_handle.abort()
             return result
 
-        self._held_object = scene_object
         result.success = True
-        result.message = f"Simulated grasp completed for '{result.object_id}'"
+        result.message = f"Grasp completed for '{result.object_id}'"
         goal_handle.succeed()
         return result
 
@@ -406,6 +438,7 @@ class ManipulatorActionServer(Node):
             steps,
             timeout,
             close_pause=False,
+            scene_object=target_object,
         )
         if not success:
             result.success = False
@@ -416,9 +449,8 @@ class ManipulatorActionServer(Node):
                 goal_handle.abort()
             return result
 
-        self._held_object = None
         result.success = True
-        result.message = f"Simulated place completed on '{result.target_id}'"
+        result.message = f"Place completed on '{result.target_id}'"
         goal_handle.succeed()
         return result
 
@@ -474,6 +506,7 @@ class ManipulatorActionServer(Node):
         steps: List[tuple[str, PoseTarget]],
         timeout: float,
         close_pause: bool,
+        scene_object: Dict,
     ) -> tuple[bool, str]:
         per_motion_timeout = max(timeout / max(len(steps), 1), 1.0)
         for index, (state, target) in enumerate(steps):
@@ -495,6 +528,9 @@ class ManipulatorActionServer(Node):
                 )
                 if goal_handle.is_cancel_requested:
                     return False, "Action canceled"
+                attached, message = self._attach_scene_object(scene_object)
+                if not attached:
+                    return False, message
             elif not close_pause and index == 2:
                 pause_feedback = feedback_type()
                 pause_feedback.state = "opening simulated gripper"
@@ -505,6 +541,9 @@ class ManipulatorActionServer(Node):
                 )
                 if goal_handle.is_cancel_requested:
                     return False, "Action canceled"
+                released, message = self._release_scene_object(scene_object)
+                if not released:
+                    return False, message
 
             success, message, _ = self._controller.move_absolute(
                 target=target,
@@ -517,6 +556,167 @@ class ManipulatorActionServer(Node):
                 return False, f"{state} failed: {message}"
 
         return True, "completed"
+
+    @property
+    def _scene_fixed_frame(self) -> str:
+        return str(self.get_parameter("scene_fixed_frame").value).strip().lstrip(
+            "/"
+        ) or "world"
+
+    def _attach_scene_object(self, scene_object: Dict) -> tuple[bool, str]:
+        object_frame = str(
+            scene_object.get("frame_id") or scene_object.get("name") or ""
+        )
+        if not object_frame:
+            return False, "Cannot attach a scene object without a frame"
+
+        try:
+            object_pose = self._world_pose_for_object(scene_object)
+            ee_transform = self._controller.lookup_transform(
+                self._scene_fixed_frame,
+                self._controller.ee_frame,
+            )
+        except TransformException as exc:
+            return False, f"Could not attach '{object_frame}': {exc}"
+
+        object_position = self._position_tuple(object_pose)
+        ee_position = self._translation_tuple(ee_transform)
+        with self._held_object_lock:
+            self._held_object = scene_object
+            self._held_object_offset = attachment_offset(
+                object_position,
+                ee_position,
+            )
+            self._held_object_orientation = object_pose.orientation
+            self._object_world_poses[self._object_key(scene_object)] = object_pose
+
+        self._set_gazebo_entity_pose(scene_object, object_pose)
+        return True, f"Attached '{scene_object.get('name', object_frame)}'"
+
+    def _release_scene_object(self, target_object: Dict) -> tuple[bool, str]:
+        with self._held_object_lock:
+            held_object = self._held_object
+            if held_object is None:
+                return False, "Cannot place because no object is held"
+
+            try:
+                target_pose = self._world_pose_for_object(target_object)
+            except TransformException as exc:
+                return False, f"Could not resolve place target: {exc}"
+
+            position = placement_position(
+                self._position_tuple(target_pose),
+                float(held_object.get("size", 0.0)),
+                float(target_object.get("height", 0.0)),
+            )
+            released_pose = Pose()
+            released_pose.position.x = position[0]
+            released_pose.position.y = position[1]
+            released_pose.position.z = position[2]
+            if self._held_object_orientation is not None:
+                released_pose.orientation = self._held_object_orientation
+            else:
+                released_pose.orientation = target_pose.orientation
+
+            self._set_gazebo_entity_pose(held_object, released_pose)
+            self._object_world_poses[
+                self._object_key(held_object)
+            ] = released_pose
+            self._held_object = None
+            self._held_object_offset = None
+            self._held_object_orientation = None
+
+        return True, f"Released object on '{target_object.get('name', 'target')}'"
+
+    def _update_held_object_pose(self) -> None:
+        with self._held_object_lock:
+            if self._held_object is None or self._held_object_offset is None:
+                return
+
+            try:
+                ee_transform = self._controller.lookup_transform(
+                    self._scene_fixed_frame,
+                    self._controller.ee_frame,
+                )
+            except TransformException:
+                return
+
+            position = attached_position(
+                self._translation_tuple(ee_transform),
+                self._held_object_offset,
+            )
+            pose = Pose()
+            pose.position.x = position[0]
+            pose.position.y = position[1]
+            pose.position.z = position[2]
+            if self._held_object_orientation is not None:
+                pose.orientation = self._held_object_orientation
+            else:
+                pose.orientation.w = 1.0
+
+            self._set_gazebo_entity_pose(self._held_object, pose)
+            self._object_world_poses[
+                self._object_key(self._held_object)
+            ] = pose
+
+    def _set_gazebo_entity_pose(
+        self,
+        scene_object: Dict,
+        pose: Pose,
+    ) -> bool:
+        if not self._set_pose_client.service_is_ready():
+            if not self._warned_about_set_pose:
+                self.get_logger().warning(
+                    "Gazebo set-pose service is unavailable; grasp actions "
+                    "will run without camera-visible object motion"
+                )
+                self._warned_about_set_pose = True
+            return False
+
+        entity_name = str(scene_object.get("name") or "").strip()
+        if not entity_name:
+            return False
+
+        request = SetEntityPose.Request()
+        request.entity.name = entity_name
+        request.entity.type = Entity.MODEL
+        request.pose = pose
+        self._set_pose_client.call_async(request)
+        return True
+
+    def _world_pose_for_object(self, scene_object: Dict) -> Pose:
+        cached_pose = self._object_world_poses.get(self._object_key(scene_object))
+        if cached_pose is not None:
+            return cached_pose
+
+        object_frame = str(
+            scene_object.get("frame_id") or scene_object.get("name") or ""
+        )
+        transform = self._controller.lookup_transform(
+            self._scene_fixed_frame,
+            object_frame,
+        )
+        pose = Pose()
+        pose.position.x = transform.transform.translation.x
+        pose.position.y = transform.transform.translation.y
+        pose.position.z = transform.transform.translation.z
+        pose.orientation = transform.transform.rotation
+        return pose
+
+    @staticmethod
+    def _object_key(scene_object: Dict) -> str:
+        return str(
+            scene_object.get("name") or scene_object.get("frame_id") or ""
+        )
+
+    @staticmethod
+    def _position_tuple(pose: Pose) -> tuple[float, float, float]:
+        return pose.position.x, pose.position.y, pose.position.z
+
+    @staticmethod
+    def _translation_tuple(transform) -> tuple[float, float, float]:
+        translation = transform.transform.translation
+        return translation.x, translation.y, translation.z
 
     def _sleep_with_cancel(self, seconds: float, goal_handle) -> None:
         deadline = time.monotonic() + max(seconds, 0.0)
@@ -565,6 +765,22 @@ class ManipulatorActionServer(Node):
         object_frame = str(scene_object.get("frame_id") or scene_object.get("name") or "")
         if not object_frame:
             return None, "Detected object has no frame_id"
+
+        with self._held_object_lock:
+            cached_pose = self._object_world_poses.get(
+                self._object_key(scene_object)
+            )
+        if cached_pose is not None:
+            try:
+                pose = self._transform_world_pose(cached_pose, target_frame)
+            except TransformException as exc:
+                return (
+                    None,
+                    f"Could not transform '{object_frame}' to "
+                    f"'{target_frame}': {exc}",
+                )
+            return pose, f"Detected '{scene_object.get('name', object_frame)}'"
+
         try:
             transform = self._controller.lookup_transform(target_frame, object_frame)
         except TransformException as exc:
@@ -578,6 +794,52 @@ class ManipulatorActionServer(Node):
         pose.pose.position.z = transform.transform.translation.z
         pose.pose.orientation = transform.transform.rotation
         return pose, f"Detected '{scene_object.get('name', object_frame)}'"
+
+    def _transform_world_pose(
+        self,
+        world_pose: Pose,
+        target_frame: str,
+    ) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.header.frame_id = target_frame
+        if target_frame == self._scene_fixed_frame:
+            pose.pose = world_pose
+            return pose
+
+        transform = self._controller.lookup_transform(
+            target_frame,
+            self._scene_fixed_frame,
+        ).transform
+        transform_quaternion = (
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w,
+        )
+        rotated_position = ServoMotionController._rotate_vector(
+            transform_quaternion,
+            self._position_tuple(world_pose),
+        )
+        pose.pose.position.x = rotated_position[0] + transform.translation.x
+        pose.pose.position.y = rotated_position[1] + transform.translation.y
+        pose.pose.position.z = rotated_position[2] + transform.translation.z
+
+        object_quaternion = (
+            world_pose.orientation.x,
+            world_pose.orientation.y,
+            world_pose.orientation.z,
+            world_pose.orientation.w,
+        )
+        qx, qy, qz, qw = ServoMotionController._quaternion_multiply(
+            transform_quaternion,
+            object_quaternion,
+        )
+        pose.pose.orientation.x = qx
+        pose.pose.orientation.y = qy
+        pose.pose.orientation.z = qz
+        pose.pose.orientation.w = qw
+        return pose
 
     def _pose_target_from_pose(self, pose: PoseStamped) -> PoseTarget:
         return self._controller.target_from_pose_stamped(pose)

@@ -160,7 +160,7 @@ The action server exposes modular ROS2 actions:
 -   `/place_object` using `manipulator_action_interfaces/action/PlaceObject`
 
 For `/move_end_effector`, `relative: false` means an absolute base-frame target and `relative: true` means an offset from the current end-effector pose.
-In the simulated pick-place scene, `/detect_object` resolves objects from `/pick_place_scene/objects` and TF frames such as `pick_cube_red`; the returned `PoseStamped` is in the requested frame or the arm base frame by default. `/grasp_object` and `/place_object` are simulation-ready action primitives: they detect the requested fixture, move through hover/approach/lift or hover/release/retreat poses, and keep simple held-object bookkeeping.
+In the simulated pick-place scene, `/detect_object` resolves objects from `/pick_place_scene/objects` and TF frames such as `pick_cube_red`; the returned `PoseStamped` is in the requested frame or the arm base frame by default. `/grasp_object` and `/place_object` are simulation-ready action primitives: they detect the requested fixture, move through hover/approach/lift or hover/release/retreat poses, and drive the held Gazebo cube with the end effector so the grasp and placement are visible in the camera feeds.
 
 Example action calls in the first arm namespace:
 
