@@ -7,6 +7,9 @@ services:
     container_name: manipulator_sim_cont
     network_mode: host
     ipc: host
+    gpus: all
+    group_add:
+      - "${RENDER_GID:-990}"
     tty: true          # Allocates a TTY
     stdin_open: true   # Keeps STDIN open, allowing for interactive shells
     privileged: true   # Needed for some hardware access, use with caution
@@ -18,12 +21,17 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - XAUTHORITY=/home/rosuser/.Xauthority
+      # Gazebo and its ROS bridges run in this container, so keep Gazebo
+      # Transport discovery on loopback instead of probing Docker interfaces.
+      - GZ_IP=${GZ_IP:-127.0.0.1}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
       - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       - FASTDDS_BUILTIN_TRANSPORTS=${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
       - CYCLONEDDS_URI=${CYCLONEDDS_URI:-file:///etc/cyclonedds/config.xml}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-graphics,utility,compute}
       - AUTO_BUILD_WORKSPACE=${AUTO_BUILD_WORKSPACE:-auto}
       - COLCON_EXECUTOR=${COLCON_EXECUTOR:-sequential}
       - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions behaviour_bridge}
@@ -32,6 +40,7 @@ services:
       - ~/.Xauthority:/home/rosuser/.Xauthority:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/shm:/dev/shm
+      - /usr/share/glvnd/egl_vendor.d/10_nvidia.json:/usr/share/glvnd/egl_vendor.d/10_nvidia.json:ro
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
       - ./simulation/manipulator_simulation_setup.yml:/home/rosuser/.config/tmuxinator/manipulator_simulation_setup.yml
       - ./docker/scripts/start_simulation.sh:/home/rosuser/start_simulation.sh:ro

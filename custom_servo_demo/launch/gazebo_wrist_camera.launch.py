@@ -350,8 +350,25 @@ def _camera_actions(context):
         output="screen",
     )
 
+    gazebo_env = {
+        "DISPLAY": "",
+        "XAUTHORITY": "",
+        "EGL_PLATFORM": "surfaceless",
+    }
+    nvidia_egl_vendor = "/usr/share/glvnd/egl_vendor.d/10_nvidia.json"
+    if os.path.isfile(nvidia_egl_vendor):
+        gazebo_env["__EGL_VENDOR_LIBRARY_FILENAMES"] = nvidia_egl_vendor
+
     gz_sim = launch.actions.ExecuteProcess(
-        cmd=["gz", "sim", "-r", "-s", world_path],
+        cmd=[
+            "gz",
+            "sim",
+            "-r",
+            "-s",
+            "--headless-rendering",
+            world_path,
+        ],
+        additional_env=gazebo_env,
         output="screen",
     )
 
