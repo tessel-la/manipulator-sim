@@ -34,6 +34,25 @@ This repository provides a robotic arm simulation environment specifically confi
 
 ## Setup and Usage
 
+### Graphics backend
+
+#### CPU / AMD
+
+The base Compose file is hardware-neutral. On AMD, Gazebo and RViz use the
+host's Mesa graphics stack; ROCm is not required:
+
+```bash
+docker compose up -d --build
+```
+
+#### NVIDIA CUDA
+
+Add the NVIDIA overlay on hosts with the NVIDIA Container Toolkit:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d --build
+```
+
 ### 1. Clone the Repository (if you haven't already)
 
 ```bash
