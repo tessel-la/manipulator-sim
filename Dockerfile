@@ -44,6 +44,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Keep the camera gateway dependency in its own layer so updating it does not
+# invalidate the much larger MoveIt/Gazebo dependency layer above.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-web-video-server \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG USERNAME=rosuser
@@ -97,6 +104,6 @@ ENV COLCON_PACKAGES="custom_servo_demo manipulator_action_interfaces manipulator
 
 ENTRYPOINT ["/home/rosuser/ros_entrypoint.sh"]
 
-EXPOSE 8000
+EXPOSE 8000 8090
 
 CMD ["bash"]

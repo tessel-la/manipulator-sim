@@ -4,19 +4,19 @@ Robotic Manipulator Planning, Execution and Visualization environment.
 
 This repository provides a robotic arm simulation environment specifically configured and tested for the [Robo-Boy](https://github.com/tessel-la/robo-boy) project. It uses ROS 2 Jazzy, MoveIt 2, and a Panda MoveIt Servo setup.
 
-
 ## Features
 
--   **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Jazzy on Ubuntu Noble.
--   **Panda Robot**: Currently focused on the Franka Emika Panda robot simulation.
--   **Reusable Action Control**: Provides ROS2 actions, a CLI, YAML sequences, and basic behavior trees for absolute and relative end-effector moves.
--   **Automated Startup**: Uses `tmuxinator` and Docker Compose to automatically launch necessary ROS nodes in a structured tmux session upon container startup.
+- **Dockerized Environment**: Ensures a consistent and reproducible setup using ROS 2 Jazzy on Ubuntu Noble.
+- **Panda Robot**: Currently focused on the Franka Emika Panda robot simulation.
+- **Reusable Action Control**: Provides ROS2 actions, a CLI, YAML sequences, and basic behavior trees for absolute and relative end-effector moves.
+- **Automated Startup**: Uses `tmuxinator` and Docker Compose to automatically launch necessary ROS nodes in a structured tmux session upon container startup.
+- **Optional RTSP/WebRTC Camera**: Converts the native wrist-camera ROS topic to low-latency H.264, with WHEP and VPN TURN fallback matching the Genesis simulator.
 
 ## Prerequisites
 
--   Docker ([Installation Guide](https://docs.docker.com/engine/install/))
--   Docker Compose ([Installation Guide](https://docs.docker.com/compose/install/))
--   An X11 server running on your host machine for GUI visualization (e.g., RViz). (Linux users usually have this by default. Windows users can use WSLg or VcXsrv. macOS users can use XQuartz.)
+- Docker ([Installation Guide](https://docs.docker.com/engine/install/))
+- Docker Compose ([Installation Guide](https://docs.docker.com/compose/install/))
+- An X11 server running on your host machine for GUI visualization (e.g., RViz). (Linux users usually have this by default. Windows users can use WSLg or VcXsrv. macOS users can use XQuartz.)
 
 ## Project Structure
 
@@ -135,9 +135,11 @@ pad, a Charuco-style board, and one wrist camera per arm. The fixed overhead
 `/scene_camera/image_raw` stream is disabled by default.
 
 This will launch `tmux` with the panes and commands defined in `simulation/manipulator_simulation_setup.yml`:
+
 1.  **multi_servo_launch**: Runs `ros2 launch custom_servo_demo multi_servo_example.launch.py` with `ARM_COUNT=1` and `ARM_PREFIX=arm` by default, creating `/arm_1`.
 2.  **wrist_cameras**: Runs `ros2 launch custom_servo_demo gazebo_wrist_camera.launch.py` with the same arm count/prefix, mounting each Gazebo camera to its namespaced hand TF frame and exposing one wrist camera per arm namespace.
 3.  **cors_mesh_server**: Serves installed ROS mesh assets from `/opt/ros/${ROS_DISTRO}/share` on port 8000.
+4.  **webrtc_mjpeg_source**: Serves `/arm_1/wrist_camera/image_raw` privately on `127.0.0.1:8090` for the optional MediaMTX gateway.
 
 Your terminal will now be attached to this tmux session.
 
@@ -168,15 +170,73 @@ Use another pick-place fixture layout without editing the launch files:
 /home/rosuser/start_simulation.sh --scene-config /path/to/my_scene.yaml --restart
 ```
 
+### RTSP/WebRTC wrist camera
+
+The optional `webrtc` Compose profile mirrors the Genesis streaming stack: a
+private ROS MJPEG source feeds FFmpeg, MediaMTX publishes H.264 over RTSP and
+WHEP, and Coturn provides short-lived TURN-over-TCP credentials for phones on
+the VPN.
+
+Create the ignored local environment file and replace the placeholder secret
+with a long random value:
+
+```bash
+cp .env.example .env
+openssl rand -hex 32
+```
+
+Then start the profile, start or restart the simulator tmux session, and wait
+for `/arm_1/wrist_camera/image_raw` to begin publishing:
+
+```bash
+docker compose --profile webrtc up -d --build
+docker exec -it manipulator_sim_cont /home/rosuser/start_simulation.sh --restart
+```
+
+The resulting endpoints are:
+
+| Endpoint                                         | Purpose                                             |
+| ------------------------------------------------ | --------------------------------------------------- |
+| `rtsp://HOST:8554/manipulator_wrist_camera`      | H.264 RTSP for native tools and gateways            |
+| `http://HOST:8889/manipulator_wrist_camera/whep` | Direct WHEP negotiation                             |
+| `/webrtc/manipulator_wrist_camera/whep`          | Same WHEP stream through Robo-Boy's reverse proxy   |
+| `/webrtc/_discovery/paths`                       | Read-only active-stream discovery through Robo-Boy  |
+| `turn:10.8.0.1:3478?transport=tcp`               | VPN TURN fallback advertised through WHEP discovery |
+
+The standard ports deliberately match the Genesis gateway so the existing
+Robo-Boy `/webrtc` route and VPN firewall rule continue to work. The two media
+gateway profiles are therefore alternatives: stop the Genesis gateway and
+TURN containers before starting this profile, or override all five media
+listeners (`STREAM_RTSP_PORT`, `STREAM_RTP_PORT`, `STREAM_RTCP_PORT`,
+`STREAM_WHEP_PORT`, and `STREAM_ICE_PORT`) and provide a matching reverse-proxy
+route.
+
+The complete Genesis and non-Genesis stacks are alternatives by default:
+Genesis also claims host port `8000`, and both ROS sides publish
+`/arm_1/wrist_camera/image_raw`. To run them concurrently, separate port 8000
+as well as the media listeners and use different `ROS_DOMAIN_ID` values.
+Otherwise a ROS subscriber can receive frames from both cameras.
+
+When sharing Robo-Boy's DDS environment, load both files (the local media file
+last):
+
+```bash
+docker compose --env-file ../robo-boy/.env --env-file .env --profile webrtc up -d --build
+```
+
+The WebRTC panel discovers the non-Genesis simulator automatically from the
+active gateway. Its RTSP URL is optional and is
+only used for display/copying; browser playback uses WHEP.
+
 ### 5. Controlling the Robot with Actions
 
 The action server exposes modular ROS2 actions:
 
--   `/move_end_effector` using `manipulator_action_interfaces/action/MoveEndEffector`
--   `/run_sequence` using `manipulator_action_interfaces/action/RunSequence`
--   `/detect_object` using `manipulator_action_interfaces/action/DetectObject`
--   `/grasp_object` using `manipulator_action_interfaces/action/GraspObject`
--   `/place_object` using `manipulator_action_interfaces/action/PlaceObject`
+- `/move_end_effector` using `manipulator_action_interfaces/action/MoveEndEffector`
+- `/run_sequence` using `manipulator_action_interfaces/action/RunSequence`
+- `/detect_object` using `manipulator_action_interfaces/action/DetectObject`
+- `/grasp_object` using `manipulator_action_interfaces/action/GraspObject`
+- `/place_object` using `manipulator_action_interfaces/action/PlaceObject`
 
 For `/move_end_effector`, `relative: false` means an absolute base-frame target and `relative: true` means an offset from the current end-effector pose.
 In the simulated pick-place scene, `/detect_object` resolves objects from `/pick_place_scene/objects` and TF frames such as `pick_cube_red`; the returned `PoseStamped` is in the requested frame or the arm base frame by default. `/grasp_object` and `/place_object` are simulation-ready action primitives: they detect the requested fixture, move through hover/approach/lift or hover/release/retreat poses, and drive the held Gazebo cube with the end effector so the grasp and placement are visible in the camera feeds.
@@ -273,10 +333,10 @@ The default tmux setup already enables this bridge. It listens on `/joy` and pub
 
 Default axis mapping:
 
--   `axes[1]`: base-frame X velocity, forward/back
--   `axes[0]`: base-frame Y velocity, left/right
--   `axes[4]`: base-frame Z velocity, up/down
--   `axes[3]`: base-frame yaw velocity
+- `axes[1]`: base-frame X velocity, forward/back
+- `axes[0]`: base-frame Y velocity, left/right
+- `axes[4]`: base-frame Z velocity, up/down
+- `axes[3]`: base-frame yaw velocity
 
 To test with a synthetic Joy message:
 
@@ -359,25 +419,25 @@ ros2 launch custom_servo_demo multi_servo_example.launch.py arm_count:=3
 
 Useful namespaced interfaces:
 
--   `/robot_description`
--   `/joint_states`
--   `/arm_1/robot_description`
--   `/arm_1/servo_node/delta_twist_cmds`
--   `/arm_1/servo_node/switch_command_type`
--   `/arm_1/servo_node/pause_servo`
--   `/arm_1/joy`
--   `/arm_1/end_effector_pose_absolute`
--   `/arm_1/end_effector_pose_relative`
--   `/arm_1/move_end_effector`
--   `/arm_1/run_sequence`
--   `/arm_1/detect_object`
--   `/arm_1/grasp_object`
--   `/arm_1/place_object`
--   `/arm_1/wrist_camera/image_raw`
--   `/arm_1/wrist_camera/camera_info`
--   `/scene_camera/image_raw` when `LAUNCH_SCENE_CAMERA=true`
--   `/scene_camera/camera_info` when `LAUNCH_SCENE_CAMERA=true`
--   `/pick_place_scene/objects`
+- `/robot_description`
+- `/joint_states`
+- `/arm_1/robot_description`
+- `/arm_1/servo_node/delta_twist_cmds`
+- `/arm_1/servo_node/switch_command_type`
+- `/arm_1/servo_node/pause_servo`
+- `/arm_1/joy`
+- `/arm_1/end_effector_pose_absolute`
+- `/arm_1/end_effector_pose_relative`
+- `/arm_1/move_end_effector`
+- `/arm_1/run_sequence`
+- `/arm_1/detect_object`
+- `/arm_1/grasp_object`
+- `/arm_1/place_object`
+- `/arm_1/wrist_camera/image_raw`
+- `/arm_1/wrist_camera/camera_info`
+- `/scene_camera/image_raw` when `LAUNCH_SCENE_CAMERA=true`
+- `/scene_camera/camera_info` when `LAUNCH_SCENE_CAMERA=true`
+- `/pick_place_scene/objects`
 
 For example, move the second arm with a synthetic Joy message:
 
@@ -387,40 +447,40 @@ ros2 topic pub -r 20 /arm_2/joy sensor_msgs/msg/Joy "{axes: [0.0, 0.5, 0.0, 0.0,
 
 The launch accepts:
 
--   `arm_count`: number of arms in the shared scene, default `1`
--   `arm_prefix`: namespace prefix, default `arm`
--   `arm_spacing`: Y-axis distance between adjacent bases, default `0.9`
--   `use_joy_teleop`: launch one Joy bridge per arm, default `true`
--   `use_pose_stamped_control`: launch one PoseStamped bridge per arm, default `true`
--   `launch_action_servers`: launch one action server per arm, default `true`
--   `runtime_executor_threads`: threads shared by each arm's PoseStamped, action, and behavior-tree nodes, default `4`
--   `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
--   `behavior_tree_name`: optional behavior tree to run once per arm namespace, default empty
--   `behavior_tree_timeout`: optional behavior tree timeout in seconds, default `60.0`
--   `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
--   `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
--   `scene_config`: YAML file defining cubes, place pads, and Charuco-style boards
--   `launch_scene_camera`: launch the fixed overhead camera, default `false`
+- `arm_count`: number of arms in the shared scene, default `1`
+- `arm_prefix`: namespace prefix, default `arm`
+- `arm_spacing`: Y-axis distance between adjacent bases, default `0.9`
+- `use_joy_teleop`: launch one Joy bridge per arm, default `true`
+- `use_pose_stamped_control`: launch one PoseStamped bridge per arm, default `true`
+- `launch_action_servers`: launch one action server per arm, default `true`
+- `runtime_executor_threads`: threads shared by each arm's PoseStamped, action, and behavior-tree nodes, default `4`
+- `prepare_servo`: switch each Servo node to Twist mode and unpause it, default `true`
+- `behavior_tree_name`: optional behavior tree to run once per arm namespace, default empty
+- `behavior_tree_timeout`: optional behavior tree timeout in seconds, default `60.0`
+- `use_rviz`: launch RViz with the aggregate multi-arm robot model, default `true`
+- `use_gazebo_camera`: launch the single Gazebo camera/world process, default `true`
+- `scene_config`: YAML file defining cubes, place pads, and Charuco-style boards
+- `launch_scene_camera`: launch the fixed overhead camera, default `false`
 
 The startup helper maps these launch arguments from options and environment variables:
 
--   `--arm-count` / `ARM_COUNT`: defaults to `1`
--   `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
--   `--rviz` / `USE_RVIZ=true`: enable RViz; the startup helper defaults it to disabled for Robo-Boy use
--   `--no-rviz` / `USE_RVIZ=false`: explicitly keep RViz disabled
--   `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
--   `--scene-config` / `PICK_PLACE_SCENE_CONFIG`: override the default pick-place fixtures
--   `--scene-camera` / `LAUNCH_SCENE_CAMERA=true`: enable the fixed overhead camera
--   `--no-scene-camera` / `LAUNCH_SCENE_CAMERA=false`: keep the fixed overhead camera disabled
--   `WRIST_CAMERA_OFFSET_ROLL`, `WRIST_CAMERA_OFFSET_PITCH`, `WRIST_CAMERA_OFFSET_YAW`: tune the Gazebo wrist camera mount orientation; pitch defaults to `-1.5708` so the simulated optical axis is aimed down into the workspace from the hand
--   `WRIST_CAMERA_LOOK_AT_FRAME`: scene frame the simulated wrist camera points at while its position follows the hand, default `pick_place_table`
--   `USE_JOY_TELEOP`: defaults to `true`
--   `USE_POSE_STAMPED_CONTROL`: defaults to `true`
--   `LAUNCH_ACTION_SERVERS`: defaults to `true`
--   `RUNTIME_EXECUTOR_THREADS`: defaults to `4`
--   `PREPARE_SERVO`: defaults to `true`
--   `BEHAVIOR_TREE_NAME`: defaults to empty
--   `BEHAVIOR_TREE_TIMEOUT`: defaults to `60.0`
+- `--arm-count` / `ARM_COUNT`: defaults to `1`
+- `--arm-prefix` / `ARM_PREFIX`: defaults to `arm`
+- `--rviz` / `USE_RVIZ=true`: enable RViz; the startup helper defaults it to disabled for Robo-Boy use
+- `--no-rviz` / `USE_RVIZ=false`: explicitly keep RViz disabled
+- `--no-gazebo-camera` / `USE_GAZEBO_CAMERA=false`: Gazebo wrist cameras default to enabled
+- `--scene-config` / `PICK_PLACE_SCENE_CONFIG`: override the default pick-place fixtures
+- `--scene-camera` / `LAUNCH_SCENE_CAMERA=true`: enable the fixed overhead camera
+- `--no-scene-camera` / `LAUNCH_SCENE_CAMERA=false`: keep the fixed overhead camera disabled
+- `WRIST_CAMERA_OFFSET_ROLL`, `WRIST_CAMERA_OFFSET_PITCH`, `WRIST_CAMERA_OFFSET_YAW`: tune the Gazebo wrist camera mount orientation; pitch defaults to `-1.5708` so the simulated optical axis is aimed down into the workspace from the hand
+- `WRIST_CAMERA_LOOK_AT_FRAME`: scene frame the simulated wrist camera points at while its position follows the hand, default `pick_place_table`
+- `USE_JOY_TELEOP`: defaults to `true`
+- `USE_POSE_STAMPED_CONTROL`: defaults to `true`
+- `LAUNCH_ACTION_SERVERS`: defaults to `true`
+- `RUNTIME_EXECUTOR_THREADS`: defaults to `4`
+- `PREPARE_SERVO`: defaults to `true`
+- `BEHAVIOR_TREE_NAME`: defaults to empty
+- `BEHAVIOR_TREE_TIMEOUT`: defaults to `60.0`
 
 This is one RViz/ROS-control simulation scene with prefixed robot models and a shared global TF tree. The Gazebo process is the camera and fixture world: it generates objects from the scene YAML and publishes TF frames such as `pick_cube_red`, `place_target_blue`, and `charuco_board` for demos or future perception replacement.
 
@@ -456,15 +516,15 @@ The same package list is also used by the Docker entrypoint via the `COLCON_PACK
 
 `tmux` uses a prefix key, by default `Ctrl+b`. After pressing the prefix, you press another key for an action:
 
--   `Ctrl+b` then release and click `Up Arrow`: Move to the pane above.
--   `Ctrl+b` then release and click `Down Arrow`: Move to the pane below.
--   `Ctrl+b` then release and click `Left Arrow`: Move to the pane to the left.
--   `Ctrl+b` then release and click `Right Arrow`: Move to the pane to the right.
--   `Ctrl+b` then release and click `o`: Cycle through panes.
--   `Ctrl+b` then release and click `%`: Split current pane vertically.
--   `Ctrl+b` then release and click `"`: Split current pane horizontally.
--   `Ctrl+b` then release and click `x`: Kill the current pane (prompts for confirmation).
--   `Ctrl+b` then release and click `d`: Detach from the current tmux session (leaves the session running in the background).
+- `Ctrl+b` then release and click `Up Arrow`: Move to the pane above.
+- `Ctrl+b` then release and click `Down Arrow`: Move to the pane below.
+- `Ctrl+b` then release and click `Left Arrow`: Move to the pane to the left.
+- `Ctrl+b` then release and click `Right Arrow`: Move to the pane to the right.
+- `Ctrl+b` then release and click `o`: Cycle through panes.
+- `Ctrl+b` then release and click `%`: Split current pane vertically.
+- `Ctrl+b` then release and click `"`: Split current pane horizontally.
+- `Ctrl+b` then release and click `x`: Kill the current pane (prompts for confirmation).
+- `Ctrl+b` then release and click `d`: Detach from the current tmux session (leaves the session running in the background).
 
 **Re-attaching to a Detached Tmux Session:**
 
@@ -495,6 +555,6 @@ docker compose down
 
 ## Customization
 
--   **Tmuxinator Configuration**: Modify `simulation/manipulator_simulation_setup.yml` to change the commands launched, the layout, or add more panes/windows.
--   **Dockerfile**: Add or remove ROS packages or system dependencies in the `Dockerfile` and rebuild the image.
--   **Docker Compose**: Adjust container settings, volumes, or environment variables in `docker-compose.yml`.
+- **Tmuxinator Configuration**: Modify `simulation/manipulator_simulation_setup.yml` to change the commands launched, the layout, or add more panes/windows.
+- **Dockerfile**: Add or remove ROS packages or system dependencies in the `Dockerfile` and rebuild the image.
+- **Docker Compose**: Adjust container settings, volumes, or environment variables in `docker-compose.yml`.

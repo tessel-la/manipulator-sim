@@ -24,6 +24,7 @@ services:
       # Transport discovery on loopback instead of probing Docker interfaces.
       - GZ_IP=${GZ_IP:-127.0.0.1}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
       - ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
       - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
@@ -33,6 +34,9 @@ services:
       - COLCON_EXECUTOR=${COLCON_EXECUTOR:-sequential}
       - COLCON_PACKAGES=${COLCON_PACKAGES:-custom_servo_demo manipulator_action_interfaces manipulator_actions behaviour_bridge}
       - LAUNCH_SCENE_CAMERA=${LAUNCH_SCENE_CAMERA:-false}
+      # Private MJPEG source consumed by the optional MediaMTX gateway. Port
+      # 8080 remains available to Robo-Boy's own web_video_server.
+      - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8090}
     volumes:
       - ~/.Xauthority:/home/rosuser/.Xauthority:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -49,6 +53,56 @@ services:
       - colcon_install_jazzy:/home/rosuser/moveit_ws/install
       - colcon_log_jazzy:/home/rosuser/moveit_ws/log
     # The default command from the Dockerfile (bash) will be used.
+
+  # Optional WebRTC profile. It mirrors the proven Genesis media path while
+  # keeping the normal ROS/Gazebo-only startup unchanged.
+  manipulator_turn:
+    profiles: [webrtc]
+    image: coturn/coturn:4.17.2-r0
+    container_name: manipulator_sim_turn
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --no-udp
+      - --no-tls
+      - --listening-ip=${TURN_LISTEN_IP:-10.8.0.1}
+      - --relay-ip=${TURN_RELAY_IP:-10.8.0.1}
+      - --listening-port=${TURN_PORT:-3478}
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_AUTH_SECRET:-}
+      - --realm=${TURN_REALM:-roboboy.vpn}
+      - --fingerprint
+      - --no-multicast-peers
+    restart: unless-stopped
+
+  manipulator_stream_gateway:
+    profiles: [webrtc]
+    image: bluenviron/mediamtx:1.20.1-ffmpeg
+    container_name: manipulator_sim_stream_gateway
+    network_mode: host
+    ipc: host
+    depends_on:
+      manipulator_sim_service:
+        condition: service_started
+      manipulator_turn:
+        condition: service_started
+    environment:
+      MTX_RTSPADDRESS: ":${STREAM_RTSP_PORT:-8554}"
+      MTX_RTPADDRESS: ":${STREAM_RTP_PORT:-8000}"
+      MTX_RTCPADDRESS: ":${STREAM_RTCP_PORT:-8001}"
+      MTX_WEBRTCADDRESS: ":${STREAM_WHEP_PORT:-8889}"
+      MTX_WEBRTCLOCALUDPADDRESS: ":${STREAM_ICE_PORT:-8189}"
+      MTX_WEBRTCLOCALTCPADDRESS: ":${STREAM_ICE_PORT:-8189}"
+      MTX_WEBRTCICESERVERS2_0_URL: turn:${TURN_HOST:-10.8.0.1}:${TURN_PORT:-3478}?transport=tcp
+      MTX_WEBRTCICESERVERS2_0_USERNAME: AUTH_SECRET
+      MTX_WEBRTCICESERVERS2_0_PASSWORD: ${TURN_AUTH_SECRET:-}
+      MJPEG_SOURCE_URL: http://127.0.0.1:${VIDEO_STREAM_PORT:-8090}/stream?topic=/arm_1/wrist_camera/image_raw&type=mjpeg&qos_profile=sensor_data
+    volumes:
+      - ./config/mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
 
 volumes:
   colcon_build_jazzy:

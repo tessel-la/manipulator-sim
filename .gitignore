@@ -1,5 +1,6 @@
 .agents/
 .codex/
+.env
 .devcontainer/
 
 __pycache__/

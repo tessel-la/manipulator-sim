@@ -14,3 +14,6 @@ windows:
         - cors_mesh_server:
             - echo "Starting CORS-enabled HTTP server for meshes on port 8000 from /opt/ros/${ROS_DISTRO:-jazzy}/share/ ..."
             - python3 /home/rosuser/cors_mesh_server.py 8000 /opt/ros/${ROS_DISTRO:-jazzy}/share/
+        - webrtc_mjpeg_source:
+            - echo "Starting private wrist-camera MJPEG source on 127.0.0.1:${VIDEO_STREAM_PORT:-8090} ..."
+            - ros2 run web_video_server web_video_server --ros-args -p port:=${VIDEO_STREAM_PORT:-8090} -p address:=127.0.0.1 -p server_threads:=2 -p ros_threads:=2

@@ -1,0 +1,69 @@
+logLevel: info
+
+# Keep the control API on loopback. Robo-Boy's relay exposes only the read-only
+# active-path listing used by external panels; mutation endpoints stay private.
+api: true
+# Reachable from the network, so a Robo-Boy client that is not on this machine can list the streams
+# it is offered. On loopback only, a desktop or phone app can play a stream whose name it already
+# knows but can never discover one.
+#
+# This is the whole control API, not just the path list: anyone who can reach it can also change
+# configuration and drop sessions. That is the same audience that already reaches rosbridge on 9090
+# with no authentication and can drive the robot, so it grants nothing new -- but narrow it to one
+# interface with MTX_APIADDRESS if that stops being true.
+apiAddress: :9997
+
+# Binding the port is not enough: MediaMTX grants the api action to 127.0.0.1 alone by default, so
+# a client anywhere else is refused before it can list a path. This repeats the stock permissions
+# and adds the VPN to the ones that may ask.
+#
+# It is the whole control API rather than the path list alone, so this is deliberately the VPN
+# subnet and not every interface. That is the same audience that already reaches rosbridge on 9090
+# unauthenticated and can drive the robot.
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+  - user: any
+    pass:
+    ips: ['127.0.0.1', '::1', '10.8.0.0/24']
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp, udp]
+rtpAddress: :8000
+rtcpAddress: :8001
+
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+# TCP is the direct fallback for mobile networks and VPNs that block UDP.
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: true
+
+hls: false
+rtmp: false
+srt: false
+moq: false
+
+paths:
+  manipulator_wrist_camera:
+    # web_video_server subscribes to the native ROS image topic. FFmpeg turns
+    # its private MJPEG stream into browser-compatible, low-latency H.264.
+    runOnInit: >-
+      ffmpeg -nostdin -hide_banner -loglevel warning
+      -fflags nobuffer -flags low_delay
+      -i "$MJPEG_SOURCE_URL"
+      -an -c:v libx264 -preset ultrafast -tune zerolatency
+      -profile:v baseline -pix_fmt yuv420p -g 15 -keyint_min 15 -bf 0
+      -rtsp_transport tcp -f rtsp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: true
