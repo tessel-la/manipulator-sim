@@ -1,0 +1,8 @@
+# GUI display mode: shows RViz on the host's X display instead of running headless. A runtime
+# toggle, not a host property -- see docker-compose.nvidia.yml/.cpu.yml for that axis instead.
+# DISPLAY and the X11 socket are already passed through unconditionally by the base file; this
+# only needs to flip the flag start_simulation.sh already reads (docker/scripts/start_simulation.sh).
+services:
+  manipulator_sim_service:
+    environment:
+      - USE_RVIZ=true
