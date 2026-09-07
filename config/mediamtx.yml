@@ -50,7 +50,13 @@ webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: true
 
-hls: false
+# A fallback transport for webviews without WebRTC. Some WebKitGTK builds ship no
+# RTCPeerConnection at all, but every one of them has Media Source Extensions, so the same H.264
+# the WHEP path already carries is remuxed into HLS segments here -- no second encode.
+hls: true
+hlsAddress: :8888
+hlsAllowOrigin: '*'
+hlsVariant: lowLatency
 rtmp: false
 srt: false
 moq: false
